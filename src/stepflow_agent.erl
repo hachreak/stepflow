@@ -38,15 +38,17 @@ init([Interceptors, ChannelCtx, {_SPid, _SCtx}=Sink]) ->
   {ok, #{interceptors => Interceptors, channel => ChannelCtx, sink => Sink}}.
 
 handle_call({append, Event}, _From, #{interceptors := Interceptors,
-                                      channel := ChannelCtx,
-                                      sink := {SinkPid, SinkCtx}
-                                     }=Ctx) ->
+                                      channel := ChannelCtx}=Ctx) ->
   {ok, ChannelCtx2} = stepflow_channel:append(
                         transform(Event, Interceptors), ChannelCtx),
-  {ok, ChannelCtx3} = stepflow_channel:pop(fun(NewEvent) ->
-      SinkPid:process(NewEvent, SinkCtx)
-    end, ChannelCtx2),
-  {reply, ack, Ctx#{channel => ChannelCtx3}}.
+  gen_server:cast(self(), pop),
+  {reply, ack, Ctx#{channel => ChannelCtx2}}.
+
+handle_cast(pop, #{channel := ChannelCtx, sink := {SinkPid, SinkCtx}}=Ctx) ->
+  {ok, ChannelCtx2} = stepflow_channel:pop(fun(Event) ->
+      SinkPid:process(Event, SinkCtx)
+    end, ChannelCtx),
+  {noreply, Ctx#{channel => ChannelCtx2}};
 
 handle_cast(_Event, Ctx) ->
   {noreply, Ctx}.
