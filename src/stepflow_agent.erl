@@ -5,10 +5,12 @@
 
 -module(stepflow_agent).
 
+-author('Leonardo Rossi <leonardo.rossi@studenti.unipr.it>').
+
 -behaviour(gen_server).
 
 -export([
-  start_link/0
+  start_link/3
 ]).
 
 %% Callbacks
@@ -21,25 +23,32 @@
   terminate/2
 ]).
 
--record(state, {}).
-
 %%====================================================================
 %% API
 %%====================================================================
 
-start_link() ->
-  gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(Interceptors, Channel, Sink) ->
+  gen_server:start_link(
+    {local, ?MODULE}, ?MODULE, [Interceptors, Channel, Sink], []).
 
 %% Callbacks
 
-init([]) ->
+init([Interceptors, ChannelCtx, {_SPid, _SCtx}=Sink]) ->
   process_flag(trap_exit, true),
-  {ok, #state{}}.
+  {ok, #{interceptors => Interceptors, channel => ChannelCtx, sink => Sink}}.
 
-handle_call(_Request, _From, Ctx) ->
-  {reply, hello, Ctx}.
+handle_call({append, Event}, _From, #{interceptors := Interceptors,
+                                      channel := ChannelCtx,
+                                      sink := {SinkPid, SinkCtx}
+                                     }=Ctx) ->
+  {ok, ChannelCtx2} = stepflow_channel:append(
+                        transform(Event, Interceptors), ChannelCtx),
+  {ok, ChannelCtx3} = stepflow_channel:pop(fun(NewEvent) ->
+      SinkPid:process(NewEvent, SinkCtx)
+    end, ChannelCtx2),
+  {reply, ack, Ctx#{channel => ChannelCtx3}}.
 
-handle_cast(_Request, Ctx) ->
+handle_cast(_Event, Ctx) ->
   {noreply, Ctx}.
 
 handle_info(_Info, Ctx) ->
@@ -49,8 +58,14 @@ terminate(_Reason, _Ctx) ->
   ok.
 
 code_change(_OldVsn, Ctx, _Extra) ->
+  io:format("code changed !"),
   {ok, Ctx}.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+transform(Event, Interceptors) ->
+  lists:foldl(fun({InterceptorPid, InterceptorCtx}, AccEvent) ->
+      InterceptorPid:intercept(AccEvent, InterceptorCtx)
+    end, Event, Interceptors).
