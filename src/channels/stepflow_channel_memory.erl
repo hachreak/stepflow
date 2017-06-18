@@ -12,10 +12,7 @@
 -export([
   handle_append/2,
   handle_init/1,
-  handle_pop/2,
-  handle_transaction_begin/0,
-  handle_transaction_commit/0,
-  handle_transaction_end/0
+  handle_pop/2
 ]).
 
 handle_init(_) -> {ok, []}.
@@ -29,9 +26,3 @@ handle_pop(Fun, [Event | Ctx]) ->
   % ack the channel
   % return
   {ok, Ctx}.
-
-handle_transaction_begin() -> ok.
-
-handle_transaction_commit() -> ok.
-
-handle_transaction_end() -> ok.

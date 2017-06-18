@@ -25,12 +25,6 @@
 
 -callback handle_pop(fun(), ctx()) -> {ok, event(), ctx()} | {error, term()}.
 
--callback handle_transaction_begin() -> ok.
-
--callback handle_transaction_commit() -> ok.
-
--callback handle_transaction_end() -> ok.
-
 %%====================================================================
 %% API
 %%====================================================================
