@@ -1,7 +1,7 @@
 stepflow
 ========
 
-An OTP application
+An OTP application that implements Flume patterns.
 
 Build
 -----
