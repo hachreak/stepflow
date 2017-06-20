@@ -27,29 +27,29 @@
 %% API
 %%====================================================================
 
-start_link([{_Interceptors, _Channel, _Sink} | _]=Outputs) ->
+start_link([{_Interceptors, _Channel, _Sink} | _]=FlowConfigs) ->
   gen_server:start_link(
-    {local, ?MODULE}, ?MODULE, [Outputs], []).
+    {local, ?MODULE}, ?MODULE, [FlowConfigs], []).
 
 %% Callbacks
 
-init([Outputs]) ->
+init([FlowConfigs]) ->
   process_flag(trap_exit, true),
-  {ok, #{outputs => Outputs}}.
+  {ok, #{flows => FlowConfigs}}.
 
-handle_call({append, Event}, _From, #{outputs := Outputs}=Ctx) ->
+handle_call({append, Event}, _From, #{flows := FlowConfigs}=Ctx) ->
   Outputs2 = process(fun({InterceptorsCtx, ChannelCtx, _}) ->
       append(Event, InterceptorsCtx, ChannelCtx)
-    end, Outputs),
+    end, FlowConfigs),
   gen_server:cast(self(), pop),
-  {reply, ack, Ctx#{outputs := Outputs2}}.
+  {reply, ack, Ctx#{flows := Outputs2}}.
 
-handle_cast(pop, #{outputs := Outputs}=Ctx) ->
+handle_cast(pop, #{flows := FlowConfigs}=Ctx) ->
   Outputs2 = process(fun({_, ChannelCtx, Sink}) ->
       % io:format("@@@FUUUU: ~p~n~n", [Fuu])
       pop(ChannelCtx, Sink)
-    end, Outputs),
-  {noreply, Ctx#{outputs := Outputs2}};
+    end, FlowConfigs),
+  {noreply, Ctx#{flows := Outputs2}};
 
 handle_cast(_Event, Ctx) ->
   {noreply, Ctx}.
@@ -68,11 +68,11 @@ code_change(_OldVsn, Ctx, _Extra) ->
 %% Internal functions
 %%====================================================================
 
-process(Fun, Outputs) ->
+process(Fun, FlowConfigs) ->
   lists:map(fun({InterceptorsCtx, _, Sink}=Output) ->
       ChannelCtx = Fun(Output),
       {InterceptorsCtx, ChannelCtx, Sink}
-    end, Outputs).
+    end, FlowConfigs).
 
 pop(ChannelCtx, {SinkPid, SinkCtx}) ->
   {ok, ChannelCtx2} = stepflow_channel:pop(fun(Event) ->
