@@ -19,5 +19,5 @@
 
 -spec intercept(event(), ctx()) -> ok.
 intercept(Event, _Ctx) ->
-  io:format("Event received: ~n~p~n~n", [Event]),
+  io:format("Intercepted: ~n~p~n~n", [Event]),
   Event.

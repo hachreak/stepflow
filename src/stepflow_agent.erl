@@ -10,7 +10,7 @@
 -behaviour(gen_server).
 
 -export([
-  start_link/3
+  start_link/1
 ]).
 
 %% Callbacks
@@ -27,28 +27,29 @@
 %% API
 %%====================================================================
 
-start_link(Interceptors, Channel, Sink) ->
+start_link([{_Interceptors, _Channel, _Sink} | _]=Outputs) ->
   gen_server:start_link(
-    {local, ?MODULE}, ?MODULE, [Interceptors, Channel, Sink], []).
+    {local, ?MODULE}, ?MODULE, [Outputs], []).
 
 %% Callbacks
 
-init([Interceptors, ChannelCtx, {_SPid, _SCtx}=Sink]) ->
+init([Outputs]) ->
   process_flag(trap_exit, true),
-  {ok, #{interceptors => Interceptors, channel => ChannelCtx, sink => Sink}}.
+  {ok, #{outputs => Outputs}}.
 
-handle_call({append, Event}, _From, #{interceptors := Interceptors,
-                                      channel := ChannelCtx}=Ctx) ->
-  {ok, ChannelCtx2} = stepflow_channel:append(
-                        transform(Event, Interceptors), ChannelCtx),
+handle_call({append, Event}, _From, #{outputs := Outputs}=Ctx) ->
+  Outputs2 = process(fun({InterceptorsCtx, ChannelCtx, _}) ->
+      append(Event, InterceptorsCtx, ChannelCtx)
+    end, Outputs),
   gen_server:cast(self(), pop),
-  {reply, ack, Ctx#{channel => ChannelCtx2}}.
+  {reply, ack, Ctx#{outputs := Outputs2}}.
 
-handle_cast(pop, #{channel := ChannelCtx, sink := {SinkPid, SinkCtx}}=Ctx) ->
-  {ok, ChannelCtx2} = stepflow_channel:pop(fun(Event) ->
-      SinkPid:process(Event, SinkCtx)
-    end, ChannelCtx),
-  {noreply, Ctx#{channel => ChannelCtx2}};
+handle_cast(pop, #{outputs := Outputs}=Ctx) ->
+  Outputs2 = process(fun({_, ChannelCtx, Sink}) ->
+      % io:format("@@@FUUUU: ~p~n~n", [Fuu])
+      pop(ChannelCtx, Sink)
+    end, Outputs),
+  {noreply, Ctx#{outputs := Outputs2}};
 
 handle_cast(_Event, Ctx) ->
   {noreply, Ctx}.
@@ -67,7 +68,25 @@ code_change(_OldVsn, Ctx, _Extra) ->
 %% Internal functions
 %%====================================================================
 
-transform(Event, Interceptors) ->
+process(Fun, Outputs) ->
+  lists:map(fun({InterceptorsCtx, _, Sink}=Output) ->
+      ChannelCtx = Fun(Output),
+      {InterceptorsCtx, ChannelCtx, Sink}
+    end, Outputs).
+
+pop(ChannelCtx, {SinkPid, SinkCtx}) ->
+  {ok, ChannelCtx2} = stepflow_channel:pop(fun(Event) ->
+      SinkPid:process(Event, SinkCtx)
+    end, ChannelCtx),
+  ChannelCtx2.
+
+append(Event, InterceptorsCtx, ChannelCtx) ->
+  {ok, ChannelCtx2} = stepflow_channel:append(
+                        transform(Event, InterceptorsCtx), ChannelCtx),
+  % gen_server:cast(self(), pop),
+  ChannelCtx2.
+
+transform(Event, InterceptorsCtx) ->
   lists:foldl(fun({InterceptorPid, InterceptorCtx}, AccEvent) ->
       InterceptorPid:intercept(AccEvent, InterceptorCtx)
-    end, Event, Interceptors).
+    end, Event, InterceptorsCtx).
