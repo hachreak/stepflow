@@ -42,8 +42,9 @@ init([FlowConfigs]) ->
 
 handle_call({append, Event}, _From, #{flows := FlowConfigs}=Ctx) ->
   Outputs2 = lists:map(fun({InterceptorsCtx, ChannelCtx, SinkCtx}) ->
-      ChannelCtx2 = append(Event, InterceptorsCtx, ChannelCtx),
-      {InterceptorsCtx, ChannelCtx2, SinkCtx}
+      {InterceptorsCtx2, ChannelCtx2} = append(
+                                          Event, InterceptorsCtx, ChannelCtx),
+      {InterceptorsCtx2, ChannelCtx2, SinkCtx}
     end, FlowConfigs),
   gen_server:cast(self(), pop),
   {reply, ack, Ctx#{flows := Outputs2}}.
@@ -80,11 +81,13 @@ pop(ChannelCtx, SinkCtx) ->
   {ChannelCtx2, SinkCtx2}.
 
 append(Event, InterceptorsCtx, ChannelCtx) ->
-  {ok, ChannelCtx2} = stepflow_channel:append(
-                        transform(Event, InterceptorsCtx), ChannelCtx),
-  ChannelCtx2.
+  {EventTransformed, InterceptorsCtx2} = transform(Event, InterceptorsCtx),
+  {ok, ChannelCtx2} = stepflow_channel:append(EventTransformed, ChannelCtx),
+  {InterceptorsCtx2, ChannelCtx2}.
 
 transform(Event, InterceptorsCtx) ->
-  lists:foldl(fun({InterceptorPid, InterceptorCtx}, AccEvent) ->
-      InterceptorPid:intercept(AccEvent, InterceptorCtx)
-    end, Event, InterceptorsCtx).
+  lists:foldl(fun(InterceptorCtx, {AccEvent, ItCtxs}) ->
+      {ok, AccEvent2, InterceptorCtx2} = stepflow_interceptor:intercept(
+                                        AccEvent, InterceptorCtx),
+      {AccEvent2, [InterceptorCtx2 | ItCtxs]}
+    end, {Event, []}, InterceptorsCtx).

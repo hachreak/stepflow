@@ -59,8 +59,9 @@ config_channel({Channel, Config}) ->
 
 -spec config_interceptors(list({atom(), any()})) -> stepflow_interceptor:ctx().
 config_interceptors(InterceptorsConfig) ->
-  lists:map(fun({Intercaptor, Config}) ->
-      {Intercaptor, Config}
+  lists:map(fun({Interceptor, Config}) ->
+      {ok, InterceptorCtx} = stepflow_interceptor:init(Interceptor, Config),
+      InterceptorCtx
     end, InterceptorsConfig).
 
 -spec config_sink({atom(), any()}) -> stepflow_sink:ctx().

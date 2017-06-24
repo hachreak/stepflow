@@ -10,14 +10,18 @@
 -behaviour(stepflow_interceptor).
 
 -export([
-  %init/1,
-  intercept/2
+  handle_init/1,
+  handle_intercept/2
 ]).
 
 -type event() :: stepflow_interceptor:event().
 -type ctx()   :: stepflow_interceptor:ctx().
 
--spec intercept(event(), ctx()) -> ok.
-intercept(Event, _Ctx) ->
+-spec handle_init(ctx()) -> {ok, ctx()} | {error, term()}.
+handle_init(_) -> {ok, []}.
+
+-spec handle_intercept(event(), ctx()) ->
+    {ok, event(), ctx()} | {stop, event(), ctx()} | {error, term()}.
+handle_intercept(Event, Ctx) ->
   io:format("Intercepted: ~n~p~n~n", [Event]),
-  Event.
+  {ok, Event, Ctx}.
