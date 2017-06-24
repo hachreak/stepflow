@@ -46,7 +46,6 @@ handle_call({append, Event}, _From, #{flows := FlowConfigs}=Ctx) ->
 
 handle_cast(pop, #{flows := FlowConfigs}=Ctx) ->
   Outputs2 = process(fun({_, ChannelCtx, Sink}) ->
-      % io:format("@@@FUUUU: ~p~n~n", [Fuu])
       pop(ChannelCtx, Sink)
     end, FlowConfigs),
   {noreply, Ctx#{flows := Outputs2}};
@@ -83,7 +82,6 @@ pop(ChannelCtx, {SinkPid, SinkCtx}) ->
 append(Event, InterceptorsCtx, ChannelCtx) ->
   {ok, ChannelCtx2} = stepflow_channel:append(
                         transform(Event, InterceptorsCtx), ChannelCtx),
-  % gen_server:cast(self(), pop),
   ChannelCtx2.
 
 transform(Event, InterceptorsCtx) ->
