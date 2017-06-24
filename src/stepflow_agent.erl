@@ -86,7 +86,7 @@ append(Event, InterceptorsCtx, ChannelCtx) ->
   {InterceptorsCtx2, ChannelCtx2}.
 
 transform(Event, InterceptorsCtx) ->
-  lists:foldl(fun(InterceptorCtx, {AccEvent, ItCtxs}) ->
+  lists:foldr(fun(InterceptorCtx, {AccEvent, ItCtxs}) ->
       {ok, AccEvent2, InterceptorCtx2} = stepflow_interceptor:intercept(
                                         AccEvent, InterceptorCtx),
       {AccEvent2, [InterceptorCtx2 | ItCtxs]}
