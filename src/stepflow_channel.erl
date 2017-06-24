@@ -23,7 +23,7 @@
 
 -callback handle_append(event(), ctx()) -> {ok, ctx()} | {error, term()}.
 
--callback handle_pop(fun(), ctx()) -> {ok, event(), ctx()} | {error, term()}.
+-callback handle_pop(fun(), ctx()) -> {ok, ctx()} | {error, term()}.
 
 %%====================================================================
 %% API
@@ -38,7 +38,7 @@ init(Module, Ctx) ->
 append(Event, #{module := Module, ctx := Ctx}=ChCtx) ->
   newctx(Module:handle_append(Event, Ctx), ChCtx).
 
--spec pop(fun(), chctx()) -> {ok, event(), chctx()} | {error, term()}.
+-spec pop(fun(), chctx()) -> {ok, chctx()} | {error, term()}.
 pop(Fun, #{module := Module, ctx := Ctx}=ChCtx) ->
   newctx(Module:handle_pop(Fun, Ctx), ChCtx).
 
