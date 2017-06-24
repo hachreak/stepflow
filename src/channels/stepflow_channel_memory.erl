@@ -22,7 +22,7 @@ handle_append(Event, Ctx) -> {ok, [Event | Ctx]}.
 handle_pop(Fun, [Event | Ctx]) ->
   % get event
   % execute the fun (e.g. move to anothe channel)
-  ok = Fun(Event),
+  {ok, SinkCtx} = Fun(Event),
   % ack the channel
   % return
-  {ok, Ctx}.
+  {ok, SinkCtx, Ctx}.

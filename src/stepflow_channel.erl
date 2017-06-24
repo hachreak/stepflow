@@ -16,6 +16,7 @@
 -type chctx() :: #{module => atom(), ctx => ctx()}.
 -type ctx()   :: any().
 -type event() :: #{headers => map(), body => map()}.
+-type skctx() :: stepflow_sink:ctx().
 
 %% Callbacks
 
@@ -23,7 +24,7 @@
 
 -callback handle_append(event(), ctx()) -> {ok, ctx()} | {error, term()}.
 
--callback handle_pop(fun(), ctx()) -> {ok, ctx()} | {error, term()}.
+-callback handle_pop(fun(), ctx()) -> {ok, skctx(), ctx()} | {error, term()}.
 
 %%====================================================================
 %% API
@@ -36,14 +37,16 @@ init(Module, Ctx) ->
 
 -spec append(event(), chctx()) -> {ok, chctx()} | {error, term()}.
 append(Event, #{module := Module, ctx := Ctx}=ChCtx) ->
-  newctx(Module:handle_append(Event, Ctx), ChCtx).
+  newctx_append(Module:handle_append(Event, Ctx), ChCtx).
 
--spec pop(fun(), chctx()) -> {ok, chctx()} | {error, term()}.
+-spec pop(fun(), chctx()) -> {ok, skctx(), chctx()} | {error, term()}.
 pop(Fun, #{module := Module, ctx := Ctx}=ChCtx) ->
-  newctx(Module:handle_pop(Fun, Ctx), ChCtx).
+  newctx_pop(Module:handle_pop(Fun, Ctx), ChCtx).
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
-newctx({ok, Ctx}, ChCtx) -> {ok, ChCtx#{ctx := Ctx}}.
+newctx_append({ok, Ctx}, ChCtx) -> {ok, ChCtx#{ctx := Ctx}}.
+
+newctx_pop({ok, SinkCtx, Ctx}, ChCtx) -> {ok, SinkCtx, ChCtx#{ctx := Ctx}}.

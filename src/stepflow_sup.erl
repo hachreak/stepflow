@@ -65,4 +65,5 @@ config_interceptors(InterceptorsConfig) ->
 
 -spec config_sink({atom(), any()}) -> stepflow_sink:ctx().
 config_sink({Sink, Config}) ->
-  {Sink, Config}.
+  {ok, SinkCtx} = stepflow_sink:init(Sink, Config),
+  SinkCtx.

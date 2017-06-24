@@ -23,6 +23,9 @@
   terminate/2
 ]).
 
+-type chctx() :: stepflow_channel:chctx().
+-type skctx() :: stepflow_sink:skctx().
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -38,15 +41,17 @@ init([FlowConfigs]) ->
   {ok, #{flows => FlowConfigs}}.
 
 handle_call({append, Event}, _From, #{flows := FlowConfigs}=Ctx) ->
-  Outputs2 = process(fun({InterceptorsCtx, ChannelCtx, _}) ->
-      append(Event, InterceptorsCtx, ChannelCtx)
+  Outputs2 = lists:map(fun({InterceptorsCtx, ChannelCtx, SinkCtx}) ->
+      ChannelCtx2 = append(Event, InterceptorsCtx, ChannelCtx),
+      {InterceptorsCtx, ChannelCtx2, SinkCtx}
     end, FlowConfigs),
   gen_server:cast(self(), pop),
   {reply, ack, Ctx#{flows := Outputs2}}.
 
 handle_cast(pop, #{flows := FlowConfigs}=Ctx) ->
-  Outputs2 = process(fun({_, ChannelCtx, Sink}) ->
-      pop(ChannelCtx, Sink)
+  Outputs2 = lists:map(fun({InterceptorsCtx, ChannelCtx, SinkCtx}) ->
+      {ChannelCtx2, SinkCtx2} = pop(ChannelCtx, SinkCtx),
+      {InterceptorsCtx, ChannelCtx2, SinkCtx2}
     end, FlowConfigs),
   {noreply, Ctx#{flows := Outputs2}};
 
@@ -67,17 +72,12 @@ code_change(_OldVsn, Ctx, _Extra) ->
 %% Internal functions
 %%====================================================================
 
-process(Fun, FlowConfigs) ->
-  lists:map(fun({InterceptorsCtx, _, Sink}=Output) ->
-      ChannelCtx = Fun(Output),
-      {InterceptorsCtx, ChannelCtx, Sink}
-    end, FlowConfigs).
-
-pop(ChannelCtx, {SinkPid, SinkCtx}) ->
-  {ok, ChannelCtx2} = stepflow_channel:pop(fun(Event) ->
-      SinkPid:process(Event, SinkCtx)
+-spec pop(chctx(), skctx()) -> {chctx(), skctx()}.
+pop(ChannelCtx, SinkCtx) ->
+  {ok, SinkCtx2, ChannelCtx2} = stepflow_channel:pop(fun(Event) ->
+      stepflow_sink:process(Event, SinkCtx)
     end, ChannelCtx),
-  ChannelCtx2.
+  {ChannelCtx2, SinkCtx2}.
 
 append(Event, InterceptorsCtx, ChannelCtx) ->
   {ok, ChannelCtx2} = stepflow_channel:append(

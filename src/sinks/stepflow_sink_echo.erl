@@ -10,13 +10,17 @@
 -behaviour(stepflow_sink).
 
 -export([
-  %init/1,
-  process/2
+  handle_init/1,
+  handle_process/2
 ]).
 
 -type event() :: stepflow_sink:event().
 -type ctx()   :: stepflow_sink:ctx().
 
--spec process(event(), ctx()) -> ok.
-process(Event, _Ctx) ->
-  io:format("Event received: ~n~p~n~n", [Event]).
+-spec handle_init(ctx()) -> {ok, ctx()} | {error, term()}.
+handle_init(_) -> {ok, []}.
+
+-spec handle_process(event(), ctx()) -> {ok, ctx()}.
+handle_process(Event, Ctx) ->
+  io:format("Event received: ~n~p~n~n", [Event]),
+  {ok, Ctx}.
