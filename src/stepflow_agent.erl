@@ -10,6 +10,7 @@
 -behaviour(gen_server).
 
 -export([
+  config/1,
   start_link/1
 ]).
 
@@ -32,6 +33,16 @@
 
 start_link([{_Interceptors, _Channel, _Sink} | _]=FlowConfigs) ->
   gen_server:start_link(?MODULE, [FlowConfigs], []).
+
+% @doc load agent configuration to pass to the agent when start.
+% @end
+-spec config(list()) -> list().
+config(Flows) ->
+  lists:map(fun({InterceptorsConfig, ChannelConfig, SinkConfig}) ->
+      {config_interceptors(InterceptorsConfig),
+       config_channel(ChannelConfig),
+       config_sink(SinkConfig)}
+    end, Flows).
 
 %% Callbacks
 
@@ -90,3 +101,20 @@ transform(Event, InterceptorsCtx) ->
                                         AccEvent, InterceptorCtx),
       {AccEvent2, [InterceptorCtx2 | ItCtxs]}
     end, {Event, []}, InterceptorsCtx).
+
+-spec config_channel({atom(), any()}) -> stepflow_channel:ctx().
+config_channel({Channel, Config}) ->
+  {ok, ChannelCtx} = stepflow_channel:init(Channel, Config),
+  ChannelCtx.
+
+-spec config_interceptors(list({atom(), any()})) -> stepflow_interceptor:ctx().
+config_interceptors(InterceptorsConfig) ->
+  lists:map(fun({Interceptor, Config}) ->
+      {ok, InterceptorCtx} = stepflow_interceptor:init(Interceptor, Config),
+      InterceptorCtx
+    end, InterceptorsConfig).
+
+-spec config_sink({atom(), any()}) -> stepflow_sink:ctx().
+config_sink({Sink, Config}) ->
+  {ok, SinkCtx} = stepflow_sink:init(Sink, Config),
+  SinkCtx.

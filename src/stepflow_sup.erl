@@ -28,13 +28,9 @@ start_link() ->
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([]) ->
-  {ok, Flows} = application:get_env(stepflow, flows),
-
-  FlowConfigs = config(Flows),
-
   Children = [
     {stepflow_agent_sup,
-     {stepflow_agent_sup, start_link, [FlowConfigs]},
+     {stepflow_agent_sup, start_link, [[]]},
      permanent, 1000, supervisor, [stepflow_agent_sup]
     }
   ],
@@ -43,28 +39,3 @@ init([]) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
-
--spec config(list()) -> list().
-config(Flows) ->
-  lists:map(fun({InterceptorsConfig, ChannelConfig, SinkConfig}) ->
-      {config_interceptors(InterceptorsConfig),
-       config_channel(ChannelConfig),
-       config_sink(SinkConfig)}
-    end, Flows).
-
--spec config_channel({atom(), any()}) -> stepflow_channel:ctx().
-config_channel({Channel, Config}) ->
-  {ok, ChannelCtx} = stepflow_channel:init(Channel, Config),
-  ChannelCtx.
-
--spec config_interceptors(list({atom(), any()})) -> stepflow_interceptor:ctx().
-config_interceptors(InterceptorsConfig) ->
-  lists:map(fun({Interceptor, Config}) ->
-      {ok, InterceptorCtx} = stepflow_interceptor:init(Interceptor, Config),
-      InterceptorCtx
-    end, InterceptorsConfig).
-
--spec config_sink({atom(), any()}) -> stepflow_sink:ctx().
-config_sink({Sink, Config}) ->
-  {ok, SinkCtx} = stepflow_sink:init(Sink, Config),
-  SinkCtx.
