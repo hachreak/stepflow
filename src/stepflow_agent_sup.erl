@@ -36,7 +36,9 @@ init([]) ->
      transient, 1000, worker, [stepflow_agent]
     }
   ],
-  {ok, { {simple_one_for_one, 0, 1}, Children} }.
+  % FIXME find a way to alert everybody that
+  % the pid of the gen_server is changed!
+  {ok, { {simple_one_for_one, 10, 5}, Children} }.
 
 %%====================================================================
 %% Internal functions
