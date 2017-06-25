@@ -39,4 +39,5 @@ process(Event, #{module := Module, ctx := Ctx}=SkCtx) ->
 %% Internal functions
 %%====================================================================
 
-newctx({ok, Ctx}, SkCtx) -> {ok, SkCtx#{ctx := Ctx}}.
+newctx({ok, Ctx}, SkCtx) -> {ok, SkCtx#{ctx := Ctx}};
+newctx({error, Error}, SkCtx) -> {error, SkCtx, Error}.
