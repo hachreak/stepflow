@@ -19,14 +19,16 @@ handle_init(_) -> {ok, []}.
 
 handle_append(Event, Ctx) -> {ok, [Event | Ctx]}.
 
-handle_pop(Fun, [Event | Ctx]=Memory) ->
+% FIXME how to empty the buffer if errors happen on sink?
+handle_pop(Fun, Memory) ->
   io:format("~nmemory: ~p~n~n~n", [Memory]),
+  Event = lists:last(Memory),
   % get event
   % execute the fun (e.g. move to anothe channel)
   case Fun(Event) of
     {ok, SinkCtx} ->
       % ack received, I can remove the event from memory
-      {ok, SinkCtx, Ctx};
+      {ok, SinkCtx, lists:droplast(Memory)};
     {error, SinkCtx, _} ->
       % something goes wrong! Leave memory as it is.
       {ok, SinkCtx, Memory}
