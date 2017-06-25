@@ -31,8 +31,7 @@
 %%====================================================================
 
 start_link([{_Interceptors, _Channel, _Sink} | _]=FlowConfigs) ->
-  gen_server:start_link(
-    {local, ?MODULE}, ?MODULE, [FlowConfigs], []).
+  gen_server:start_link(?MODULE, [FlowConfigs], []).
 
 %% Callbacks
 
