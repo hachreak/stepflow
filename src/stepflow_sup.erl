@@ -30,7 +30,7 @@ start_link() ->
 init([]) ->
   Children = [
     {stepflow_agent_sup,
-     {stepflow_agent_sup, start_link, [[]]},
+     {stepflow_agent_sup, start_link, []},
      permanent, 1000, supervisor, [stepflow_agent_sup]
     }
   ],

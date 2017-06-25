@@ -10,7 +10,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/1]).
+-export([start_link/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -21,22 +21,22 @@
 %% API functions
 %%====================================================================
 
-start_link(FlowConfigs) ->
-  supervisor:start_link({local, ?SERVER}, ?MODULE, [FlowConfigs]).
+start_link() ->
+  supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 %%====================================================================
 %% Supervisor callbacks
 %%====================================================================
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
-init([FlowConfigs]) ->
+init([]) ->
   Children = [
     {stepflow_agent,
-     {stepflow_agent, start_link, [FlowConfigs]},
-     permanent, 1000, worker, [stepflow_agent]
+     {stepflow_agent, start_link, []},
+     transient, 1000, worker, [stepflow_agent]
     }
   ],
-  {ok, { {one_for_all, 0, 1}, Children} }.
+  {ok, { {simple_one_for_one, 0, 1}, Children} }.
 
 %%====================================================================
 %% Internal functions
