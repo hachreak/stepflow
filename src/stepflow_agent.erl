@@ -10,6 +10,7 @@
 -behaviour(gen_server).
 
 -export([
+  append/2,
   config/1,
   start_link/1
 ]).
@@ -44,6 +45,9 @@ config(Flows) ->
        config_sink(SinkConfig)}
     end, Flows).
 
+append(Pid, Event) ->
+  gen_server:call(Pid, {append, Event}).
+
 %% Callbacks
 
 init([FlowConfigs]) ->
@@ -73,6 +77,7 @@ handle_info(_Info, Ctx) ->
   {noreply, Ctx}.
 
 terminate(_Reason, _Ctx) ->
+  io:format("Terminate!!~n"),
   ok.
 
 code_change(_OldVsn, Ctx, _Extra) ->
