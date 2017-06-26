@@ -40,4 +40,4 @@ process(Event, #{module := Module, ctx := Ctx}=SkCtx) ->
 %%====================================================================
 
 newctx({ok, Ctx}, SkCtx) -> {ok, SkCtx#{ctx := Ctx}};
-newctx({error, Error}, SkCtx) -> {error, SkCtx, Error}.
+newctx({error, Error}, _SkCtx) -> {error, Error}.
