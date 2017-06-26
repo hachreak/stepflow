@@ -10,7 +10,7 @@
 -export([
   append/2,
   init/2,
-  pop/3
+  pop/2
 ]).
 
 -type chctx() :: #{module => atom(), ctx => ctx()}.
@@ -24,8 +24,7 @@
 
 -callback handle_append(event(), ctx()) -> {ok, ctx()} | {error, term()}.
 
--callback handle_pop(fun(), skctx(), ctx()) ->
-    {ok, skctx(), ctx()} | {error, term()}.
+-callback handle_pop(skctx(), ctx()) -> {ok, skctx(), ctx()} | {error, term()}.
 
 -callback handle_has_more(ctx()) -> {boolean(), ctx()}.
 
@@ -42,12 +41,9 @@ init(Module, Ctx) ->
 append(Event, #{module := Module, ctx := Ctx}=ChCtx) ->
   newctx_append(Module:handle_append(Event, Ctx), ChCtx).
 
--spec pop(fun(), skctx(), chctx()) -> {ok, skctx(), chctx()} | {error, term()}.
-pop(Fun, SinkCtx, #{module := Module, ctx := Ctx}=ChCtx) ->
-  % case Module:handle_has_more(Ctx) of
-    % {true, Ctx2} ->
-      % newctx_pop(Module:handle_pop(Fun, SinkCtx, Ctx), Module, Fun, ChCtx).
-  newctx_pop({ok, SinkCtx, Ctx}, Module, Fun, ChCtx).
+-spec pop(skctx(), chctx()) -> {ok, skctx(), chctx()} | {error, term()}.
+pop(SinkCtx, #{module := Module, ctx := Ctx}=ChCtx) ->
+  newctx_pop({ok, SinkCtx, Ctx}, Module, ChCtx).
 
 %%====================================================================
 %% Internal functions
@@ -55,13 +51,12 @@ pop(Fun, SinkCtx, #{module := Module, ctx := Ctx}=ChCtx) ->
 
 newctx_append({ok, Ctx}, ChCtx) -> {ok, ChCtx#{ctx := Ctx}}.
 
-newctx_pop({ok, SinkCtx, Ctx}, Module, Fun, ChCtx) ->
+newctx_pop({ok, SinkCtx, Ctx}, Module, ChCtx) ->
   case Module:handle_has_more(Ctx) of
     {true, Ctx2} ->
-      newctx_pop(Module:handle_pop(Fun, SinkCtx, Ctx),
-                 Module, Fun, ChCtx#{ctx := Ctx2});
+      newctx_pop(Module:handle_pop(SinkCtx, Ctx), Module, ChCtx#{ctx := Ctx2});
     {false, Ctx2} ->
       {ok, SinkCtx, ChCtx#{ctx := Ctx2}}
   end;
-newctx_pop({error, Error}, _Module, _Fun, _ChCtx) ->
+newctx_pop({error, Error}, _Module, _ChCtx) ->
   {error, Error}.

@@ -13,7 +13,7 @@
   handle_append/2,
   handle_has_more/1,
   handle_init/1,
-  handle_pop/3
+  handle_pop/2
 ]).
 
 -type ctx()   :: list().
@@ -26,15 +26,15 @@ handle_init(_) -> {ok, []}.
 -spec handle_append(event(), ctx()) -> {ok, ctx()} | {error, term()}.
 handle_append(Event, Ctx) -> {ok, [Event | Ctx]}.
 
-% FIXME how to empty the buffer if errors happen on sink?
--spec handle_pop(fun(), skctx(), ctx()) ->
+% FIXME how to periodically check to empty the buffer if errors happen on sink?
+-spec handle_pop(skctx(), ctx()) ->
     {ok, skctx(), ctx()} | {error, term()}.
-handle_pop(Fun, SinkCtx, Memory) ->
+handle_pop(SinkCtx, Memory) ->
   io:format("~nmemory: ~p~n~n~n", [Memory]),
   Event = lists:last(Memory),
   % get event
   % execute the fun (e.g. move to anothe channel)
-  case Fun(Event, SinkCtx) of
+  case stepflow_sink:process(Event, SinkCtx) of
     {ok, SinkCtx2} ->
       % ack received, I can remove the event from memory
       {ok, SinkCtx2, lists:droplast(Memory)};

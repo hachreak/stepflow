@@ -90,9 +90,7 @@ code_change(_OldVsn, Ctx, _Extra) ->
 
 -spec pop(chctx(), skctx()) -> {chctx(), skctx()}.
 pop(ChannelCtx, SinkCtx) ->
-  case stepflow_channel:pop(fun(Event, MySinkCtx) ->
-        stepflow_sink:process(Event, MySinkCtx)
-      end, SinkCtx, ChannelCtx) of
+  case stepflow_channel:pop(SinkCtx, ChannelCtx) of
     {ok, SinkCtx2, ChannelCtx2} -> {ChannelCtx2, SinkCtx2};
     {error, _} -> {ChannelCtx, SinkCtx}
   end.
