@@ -11,6 +11,7 @@
 
 -export([
   handle_init/1,
+  handle_is_module/2,
   handle_process/2
 ]).
 
@@ -24,3 +25,6 @@ handle_init(_) -> {ok, []}.
 handle_process(Event, Ctx) ->
   io:format("Event received: ~n~p~n~n", [Event]),
   {ok, Ctx}.
+
+-spec handle_is_module(erlang:pid(), ctx()) -> boolean().
+handle_is_module(_, _) -> true.

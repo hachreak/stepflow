@@ -17,8 +17,11 @@
 
 %% Callbacks
 -export([
+  attach/2,
   init/1,
   code_change/3,
+  debug/2,
+  detach/2,
   handle_call/3,
   handle_cast/2,
   handle_info/2,
@@ -48,6 +51,15 @@ config(Flows) ->
 append(Pid, Event) ->
   gen_server:call(Pid, {append, Event}).
 
+attach(Pid, FlowConfig) ->
+  gen_server:cast(Pid, {attach, FlowConfig}).
+
+detach(Pid, SinkPid) ->
+  gen_server:call(Pid, {detach, SinkPid}).
+
+debug(Pid, flow) ->
+  gen_server:call(Pid, {debug, flow}).
+
 %% Callbacks
 
 init([FlowConfigs]) ->
@@ -61,7 +73,14 @@ handle_call({append, Event}, _From, #{flows := FlowConfigs}=Ctx) ->
       {InterceptorsCtx2, ChannelCtx2, SinkCtx}
     end, FlowConfigs),
   gen_server:cast(self(), pop),
-  {reply, ack, Ctx#{flows := Outputs2}}.
+  {reply, ack, Ctx#{flows := Outputs2}};
+handle_call({detach, SinkPidToDetach}, _From, #{flows := FlowConfigs2}=Ctx) ->
+  {FlowConfigs, [Detached]} = lists:partition(fun({_, _, SinkCtx}) ->
+      not stepflow_sink:is_module(SinkPidToDetach, SinkCtx)
+    end, FlowConfigs2),
+  {reply, {ok, Detached}, Ctx#{flows := FlowConfigs}};
+handle_call({debug, flow}, _From, #{flows := FlowConfigs}=Ctx) ->
+  {reply, FlowConfigs, Ctx}.
 
 handle_cast(pop, #{flows := FlowConfigs}=Ctx) ->
   Outputs2 = lists:map(fun({InterceptorsCtx, ChannelCtx, SinkCtx}) ->
@@ -69,6 +88,8 @@ handle_cast(pop, #{flows := FlowConfigs}=Ctx) ->
       {InterceptorsCtx, ChannelCtx2, SinkCtx2}
     end, FlowConfigs),
   {noreply, Ctx#{flows := Outputs2}};
+handle_cast({attach, FlowConfig}, #{flows := FlowConfigs2}=Ctx) ->
+  {noreply, Ctx#{flows := [FlowConfig | FlowConfigs2]}};
 
 handle_cast(_Event, Ctx) ->
   {noreply, Ctx}.

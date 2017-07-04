@@ -9,6 +9,7 @@
 
 -export([
   init/2,
+  is_module/2,
   process/2
 ]).
 
@@ -22,6 +23,8 @@
 
 -callback handle_process(event(), ctx()) -> {ok, ctx()} | {error, term()}.
 
+-callback handle_is_module(erlang:pid(), ctx()) -> boolean().
+
 %%====================================================================
 %% API
 %%====================================================================
@@ -34,6 +37,10 @@ init(Module, Ctx) ->
 -spec process(event(), skctx()) -> {ok, skctx()} | {error, term()}.
 process(Event, #{module := Module, ctx := Ctx}=SkCtx) ->
   newctx(Module:handle_process(Event, Ctx), SkCtx).
+
+-spec is_module(erlang:pid(), skctx()) -> boolean().
+is_module(Pid, #{module := Module, ctx := Ctx}) ->
+  Module:handle_is_module(Pid, Ctx).
 
 %%====================================================================
 %% Internal functions

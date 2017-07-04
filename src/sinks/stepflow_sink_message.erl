@@ -11,6 +11,7 @@
 
 -export([
   handle_init/1,
+  handle_is_module/2,
   handle_process/2
 ]).
 
@@ -28,3 +29,7 @@ handle_process(Event, Pid) ->
       {ok, Pid};
     _ -> {error, source_unreachable}
   end.
+
+-spec handle_is_module(erlang:pid(), ctx()) -> boolean().
+handle_is_module(Pid, Pid) -> true;
+handle_is_module(_, _) -> false.
