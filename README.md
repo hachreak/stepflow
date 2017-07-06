@@ -36,3 +36,16 @@ through them.
     6> {ok, Pid2} = supervisor:start_child(whereis(stepflow_agent_sup), [FlowConfigs2]).
     7> stepflow_agent:append(Pid2, hello).
     8> stepflow_agent:pop(Pid2).
+
+Run demo 3
+----------
+
+In this example, we use RabbitMQ as channel.
+
+    $ docker run -d --rm --hostname my-rabbit --name some-rabbit -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+
+    $ rebar3 auto --sname pippo --apps stepflow --config priv/example.config
+
+    1> FlowConfigs3 = stepflow_agent:config([{[], {stepflow_channel_rabbitmq,#{port => 5672}}, {stepflow_sink_echo, nope}}]).
+    2> {ok, Pid3} = supervisor:start_child(whereis(stepflow_agent_sup), [FlowConfigs3]).
+    3> stepflow_agent:append(Pid3, <<"hello">>).
