@@ -39,7 +39,7 @@ handle_pop(SinkCtx, Memory) ->
     {ok, SinkCtx2} ->
       % ack received, I can remove the event from memory
       {ok, SinkCtx2, lists:droplast(Memory)};
-    {error, _} ->
+    {error, _}=Error ->
       % something goes wrong! Leave memory as it is.
-      {error, Memory}
+      Error
   end.
