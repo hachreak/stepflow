@@ -22,6 +22,7 @@
   code_change/3,
   debug/2,
   detach/2,
+  pop/1,
   handle_call/3,
   handle_cast/2,
   handle_info/2,
@@ -44,12 +45,15 @@ start_link([{_Interceptors, _Channel, _Sink} | _]=FlowConfigs) ->
 config(Flows) ->
   lists:map(fun({InterceptorsConfig, ChannelConfig, SinkConfig}) ->
       {config_interceptors(InterceptorsConfig),
-       config_channel(ChannelConfig),
+       config_channel(ChannelConfig, config_sink(SinkConfig)),
        config_sink(SinkConfig)}
     end, Flows).
 
 append(Pid, Event) ->
   gen_server:call(Pid, {append, Event}).
+
+pop(Pid) ->
+  gen_server:cast(Pid, pop).
 
 attach(Pid, FlowConfig) ->
   gen_server:cast(Pid, {attach, FlowConfig}).
@@ -72,7 +76,6 @@ handle_call({append, Event}, _From, #{flows := FlowConfigs}=Ctx) ->
                                           Event, InterceptorsCtx, ChannelCtx),
       {InterceptorsCtx2, ChannelCtx2, SinkCtx}
     end, FlowConfigs),
-  gen_server:cast(self(), pop),
   {reply, ack, Ctx#{flows := Outputs2}};
 handle_call({detach, SinkPidToDetach}, _From, #{flows := FlowConfigs2}=Ctx) ->
   {FlowConfigs, [Detached]} = lists:partition(fun({_, _, SinkCtx}) ->
@@ -128,9 +131,9 @@ transform(Event, InterceptorsCtx) ->
       {AccEvent2, [InterceptorCtx2 | ItCtxs]}
     end, {Event, []}, InterceptorsCtx).
 
--spec config_channel({atom(), any()}) -> stepflow_channel:ctx().
-config_channel({Channel, Config}) ->
-  {ok, ChannelCtx} = stepflow_channel:init(Channel, Config),
+-spec config_channel({atom(), any()}, any()) -> stepflow_channel:ctx().
+config_channel({Channel, Config}, SinkCtx) ->
+  {ok, ChannelCtx} = stepflow_channel:init(Channel, Config, SinkCtx),
   ChannelCtx.
 
 -spec config_interceptors(list({atom(), any()})) -> stepflow_interceptor:ctx().

@@ -16,7 +16,8 @@ Run demo 1
     2> FlowConfigs = stepflow_agent:config(Flows).
     3> {ok, Pid} = supervisor:start_child(whereis(stepflow_agent_sup), [FlowConfigs]).
     4> gen_server:call(Pid, {append, hello}).
-    4> stepflow_agent:append(Pid, hello).
+    5> stepflow_agent:append(Pid, hello).
+    6> stepflow_agent:pop(Pid).
 
 Run demo 2
 ----------
@@ -34,3 +35,4 @@ through them.
     5> FlowConfigs2 = stepflow_agent:config([Flow2]).
     6> {ok, Pid2} = supervisor:start_child(whereis(stepflow_agent_sup), [FlowConfigs2]).
     7> stepflow_agent:append(Pid2, hello).
+    8> stepflow_agent:pop(Pid2).
