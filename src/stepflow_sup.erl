@@ -31,10 +31,10 @@ init([]) ->
   Children = [
     {stepflow_agent_sup,
      {stepflow_agent_sup, start_link, []},
-     permanent, 1000, supervisor, [stepflow_agent_sup]
+     transient, 1000, supervisor, [stepflow_agent_sup]
     }
   ],
-  {ok, { {one_for_all, 0, 1}, Children} }.
+  {ok, { {simple_one_for_one, 10, 5}, Children} }.
 
 %%====================================================================
 %% Internal functions
