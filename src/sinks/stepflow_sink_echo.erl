@@ -23,7 +23,7 @@ handle_init(_) -> {ok, []}.
 
 -spec handle_process(event(), ctx()) -> {ok, ctx()}.
 handle_process(Event, Ctx) ->
-  io:format("Event received: ~n~p~n~n", [Event]),
+  io:format("Event received: ~p~n", [Event]),
   {ok, Ctx}.
 
 -spec handle_is_module(erlang:pid(), ctx()) -> boolean().

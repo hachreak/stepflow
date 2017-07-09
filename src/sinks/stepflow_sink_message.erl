@@ -23,9 +23,9 @@ handle_init(Pid) -> {ok, Pid}.
 
 -spec handle_process(event(), ctx()) -> {ok, ctx()}.
 handle_process(Event, Pid) ->
-  case stepflow_agent:append(Pid, Event) of
-    ack ->
-      io:format("Event send to ~p: ~n~p~n~n", [Pid, Event]),
+  case stepflow_source_message:sync_append(Pid, Event) of
+    ok ->
+      io:format("Event send to ~p: ~p~n", [Pid, Event]),
       {ok, Pid};
     _ -> {error, source_unreachable}
   end.

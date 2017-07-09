@@ -9,7 +9,9 @@
 
 -export([
   init/2,
-  intercept/2
+  init_all/1,
+  intercept/2,
+  transform/2
 ]).
 
 -type event() :: stepflow_agent:event().
@@ -36,6 +38,20 @@ init(Module, Ctx) ->
     {ok, event(), ctx()} | {stop, event(), ctx()} | {error, term()}.
 intercept(Event, #{module := Module, ctx := Ctx}=SrCtx) ->
   newctx(Module:handle_intercept(Event, Ctx), SrCtx).
+
+-spec init_all(list({atom(), ctx()})) -> list(ctx()).
+init_all(InterceptorsConfig) ->
+  lists:map(fun({Interceptor, Config}) ->
+      {ok, InterceptorCtx} = init(Interceptor, Config),
+      InterceptorCtx
+    end, InterceptorsConfig).
+
+-spec transform(event(), list(ctx())) -> {event(), list(ctx())}.
+transform(Event, InterceptorsCtx) ->
+  lists:foldr(fun(InterceptorCtx, {AccEvent, ItCtxs}) ->
+      {ok, AccEvent2, InterceptorCtx2} = intercept(AccEvent, InterceptorCtx),
+      {AccEvent2, [InterceptorCtx2 | ItCtxs]}
+    end, {Event, []}, InterceptorsCtx).
 
 %%====================================================================
 %% Internal functions

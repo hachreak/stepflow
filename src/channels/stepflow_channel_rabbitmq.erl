@@ -8,63 +8,122 @@
 -author('Leonardo Rossi <leonardo.rossi@studenti.unipr.it>').
 
 -behaviour(stepflow_channel).
+-behaviour(gen_server).
 
 -include_lib("amqp_client/include/amqp_client.hrl").
 
 -export([
-  handle_append/2,
-  handle_init/2,
-  handle_pop/2,
-  loop/1
+  start_link/1,
+  init/1,
+  code_change/3,
+  handle_call/3,
+  handle_cast/2,
+  handle_info/2,
+  terminate/2
 ]).
 
--type ctx()   :: list().
+-export([
+  config/1
+]).
+
+-type ctx()   :: map().
 -type event() :: stepflow_channel:event().
 -type skctx() :: stepflow_channel:skctx().
 
--spec handle_init(ctx(), skctx()) -> {ok, ctx()} | {error, term()}.
-handle_init(Config, SinkCtx) ->
-  Ctx = connect(config(Config, SinkCtx)),
-  {ok, Ctx}.
+%% Callbacks gen_server
 
--spec handle_append(event(), ctx()) -> {ok, ctx()} | {error, term()}.
-handle_append(Event, #{channel := Channel, exchange := Exchange,
-                       routing_key := RoutingKey}=Ctx) ->
+-spec start_link(ctx()) -> {ok, pid()} | ignore | {error, term()}.
+start_link(Config) ->
+  gen_server:start_link(?MODULE, [Config], []).
+
+-spec init(list(ctx())) -> {ok, ctx()} | {error, term()}.
+init([Config]) ->
+  {ok, Config#{status => offline}}.
+
+-spec handle_call(setup | {connect_sink, skctx()}, {pid(), term()}, ctx()) ->
+    {reply, ok, ctx()}.
+handle_call(setup, _From, Ctx) ->
+  Ctx2 = handle_connect(Ctx),
+  {reply, ok, Ctx2};
+handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
+  case handle_route(Ctx#{skctx => SinkCtx}) of
+    {error, _}=Error -> {reply, Error, Ctx};
+    {ok, Ctx2} -> {reply, ok, Ctx2}
+  end;
+handle_call(Input, _From, Ctx) ->
+  {reply, Input, Ctx}.
+
+-spec handle_cast({append, event()}, ctx()) -> {noreply, ctx()}.
+handle_cast({append, Event}, #{exchange:=Exchange, routing_key:=RoutingKey,
+                               channel:=Channel}=Ctx) ->
   amqp_channel:cast(Channel, #'basic.publish'{
       exchange=Exchange, routing_key=RoutingKey
     }, #amqp_msg{payload=Event}),
+  {noreply, Ctx};
+handle_cast(_, Ctx) ->
+  {noreply, Ctx}.
+
+handle_info(#'basic.consume_ok'{}, Ctx) ->
+  %% This is the first message received
+  {noreply, Ctx};
+handle_info(#'basic.cancel_ok'{}, Ctx) ->
+  %% This is received when the subscription is cancelled
+  Ctx2 = disconnect(Ctx),
+  {noreply, Ctx2};
+handle_info({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Event}},
+            #{channel := Channel, skctx := SinkCtx}=Ctx) ->
+  %% A delivery
+  case process(Channel, Tag, Event, SinkCtx) of
+    {ok, SinkCtx2} -> {noreply, Ctx#{skctx => SinkCtx2}};
+    {error, sink_fails} ->
+      Ctx2 = disconnect(Ctx),
+      {noreply, Ctx2}
+  end;
+handle_info(_Info, Ctx) ->
+  {noreply, Ctx}.
+
+terminate(_Reason, _Ctx) ->
+  io:format("Terminate!!~n"),
+  ok.
+
+code_change(_OldVsn, Ctx, _Extra) ->
+  io:format("code changed !"),
   {ok, Ctx}.
 
--spec handle_pop(skctx(), ctx()) ->
-    {ok, skctx(), ctx()} | {error, term()}.
-handle_pop(_SinkCtx, _Ctx) ->
-  % TODO implement!
-  {error, not_implemented}.
-  % get event
-  % case amqp_channel:call(Channel, #'basic.get'{
-  %     queue = Queue, no_ack = false}) of
-  %   #'basic.get_empty'{} -> {error, empty};
-  %   {#'basic.get_ok'{delivery_tag = Tag}, Event} ->
-  %     case process(Channel, Tag, Event, SinkCtx) of
-  %       {ok, SinkCtx2} -> {ok, SinkCtx2, Ctx};
-  %       {error, sink_fails}=Error -> Error
-  %     end
-  % end.
+%% Callbacks channel
 
-%% Private functions
+% -spec pop(skctx(), ctx()) -> {ok, skctx(), ctx()} | {error, term()}.
+% pop(_SinkCtx, _Ctx) ->
+%   % TODO implement!
+%   {error, not_implemented}.
+%   % get event
+%   % case amqp_channel:call(Channel, #'basic.get'{
+%   %     queue = Queue, no_ack = false}) of
+%   %   #'basic.get_empty'{} -> {error, empty};
+%   %   {#'basic.get_ok'{delivery_tag = Tag}, Event} ->
+%   %     case process(Channel, Tag, Event, SinkCtx) of
+%   %       {ok, SinkCtx2} -> {ok, SinkCtx2, Ctx};
+%   %       {error, sink_fails}=Error -> Error
+%   %     end
+%   % end.
 
-config(Config, SinkCtx) ->
+%% API
+
+-spec config(ctx()) -> ctx().
+config(Config) ->
   Host = maps:get(host, Config, "localhost"),
   Exchange = maps:get(exchange, Config, <<"stepflow_channel_rabbitmq">>),
   RoutingKey = maps:get(routing_key, Config, <<"stepflow_channel_rabbitmq">>),
   Port = maps:get(port, Config, 5672),
   Config#{exchange => Exchange, routing_key => RoutingKey, durable => true,
-          host => Host, port => Port, skctx => SinkCtx, queue => RoutingKey}.
+          host => Host, port => Port, queue => RoutingKey}.
 
-connect(#{is_connected := true}=Ctx) -> Ctx;
-connect(#{host := Host, exchange := Exchange, durable := Durable,
-          routing_key := RoutingKey, port := Port, skctx := SinkCtx,
-          queue := Queue}=Config) ->
+%% Private functions
+
+-spec handle_connect(ctx()) -> ctx().
+handle_connect(#{status := online}=Ctx) -> Ctx;
+handle_connect(#{host := Host, exchange := Exchange, durable := Durable,
+          port := Port, queue := Queue}=Config) ->
   {ok, Connection} =
         amqp_connection:start(#amqp_params_network{host = Host, port = Port}),
   % Open a channel
@@ -76,38 +135,20 @@ connect(#{host := Host, exchange := Exchange, durable := Durable,
   % queue declare
   #'queue.declare_ok'{} = amqp_channel:call(
                              Channel, #'queue.declare'{queue=Queue}),
+  Config#{channel => Channel, connection => Connection, queue => Queue,
+          status => online}.
+
+-spec handle_route(ctx()) -> {ok, ctx()} | {error, disconnected}.
+handle_route(#{exchange := Exchange, channel := Channel, queue := Queue,
+               routing_key := RoutingKey}=Ctx) ->
   % Create a routing rule from an exchange to a queue
   amqp_channel:call(Channel, #'queue.bind'{
     queue = Queue, exchange = Exchange, routing_key = RoutingKey}),
-
-  receiver(Connection, Channel, SinkCtx, Queue),
-
-  Config#{channel => Channel, connection => Connection, queue => Queue,
-          is_connected => true}.
-
-receiver(Connection, Channel, SinkCtx, Queue) ->
-  % run a process to receive messages
-  Pid = spawn_link(stepflow_channel_rabbitmq, loop,
-             [{Connection, Channel, SinkCtx}]),
   % subscribe to a queue
   #'basic.consume_ok'{consumer_tag = _Tag} = amqp_channel:subscribe(
-    Channel, #'basic.consume'{queue = Queue}, Pid).
-
-loop({Connection, Channel, SinkCtx}=Config) ->
-  receive
-    %% This is the first message received
-    #'basic.consume_ok'{} -> loop(Config);
-    %% This is received when the subscription is cancelled
-    #'basic.cancel_ok'{} -> close(Connection, Channel);
-    %% A delivery
-    {#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Event}} ->
-      case process(Channel, Tag, Event, SinkCtx) of
-        {ok, SinkCtx2} -> loop({Connection, Channel, SinkCtx2});
-        {error, sink_fails}=Error ->
-          close(Connection, Channel),
-          Error
-      end
-  end.
+    Channel, #'basic.consume'{queue = Queue}, self()),
+  {ok, Ctx};
+handle_route(_) -> {error, disconnected}.
 
 process(Channel, Tag, Event, SinkCtx) ->
   case stepflow_sink:process(Event, SinkCtx) of
@@ -122,8 +163,12 @@ process(Channel, Tag, Event, SinkCtx) ->
       {error, sink_fails}
   end.
 
-close(Connection, Channel) ->
+
+disconnect(
+    #{status := online, connection := Connection, channel := Channel}=Ctx) ->
   %% Close the channel
-  amqp_channel:close(Channel),
+  amqp_channel:disconnect(Channel),
   %% Close the connection
-  amqp_connection:close(Connection).
+  amqp_connection:disconnect(Connection),
+  Ctx#{status => offline};
+disconnect(Ctx) -> Ctx.

@@ -8,50 +8,26 @@ Build
 
     $ rebar3 compile
 
-Run demo 1
-----------
+Run demo
+--------
 
     $ rebar3 auto --sname pippo --apps stepflow --config priv/example.config
 
-    1> {ok, PidAgentSup1} = supervisor:start_child(whereis(stepflow_sup), []).
-    2> {ok, Flows} = application:get_env(stepflow, flows).
-    3> FlowConfigs1 = stepflow_agent:config(Flows).
-    4> {ok, Pid1} = supervisor:start_child(PidAgentSup1, [FlowConfigs1]).
+    1> SrcCtx = {[{stepflow_interceptor_counter, {}}], #{}}.
+    2> Input = {stepflow_source_message, SrcCtx}.
+    3> {ok, SkCtx1} = stepflow_sink:config(stepflow_sink_echo, nope).
+    4> ChCtx1 = {stepflow_channel_memory, #{}, SkCtx1}.
+    5> Output = [ChCtx1].
+    6> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
 
-    5> stepflow_agent:append(Pid1, hello).
-    6> stepflow_agent:pop(Pid1).
+    7> stepflow_source_message:append(PidS, <<"hello">>).
 
-Run demo 2
-----------
+    8> SrcCtx2 = {[{stepflow_interceptor_counter, {}}], #{}}.
+    9> Input2 = {stepflow_source_message, SrcCtx2}.
+    10> {ok, SkCtx3} = stepflow_sink:config(stepflow_sink_message, PidS).
+    11> ChCtx2 = {stepflow_channel_memory, #{}, SkCtx3}.
+    12> Output2 = [ChCtx2].
+    13> {PidSub2, PidS2, PidCs2} = stepflow_agent_sup:new(Input2, Output2).
 
-In this example, we have two agent connected and we'll try to send a message
-through them.
+    14> stepflow_source_message:append(PidS2, <<"hello">>).
 
-    $ rebar3 auto --sname pippo --apps stepflow --config priv/example.config
-
-    1> {ok, PidAgentSup1} = supervisor:start_child(whereis(stepflow_sup), []).
-    2> {ok, Flows} = application:get_env(stepflow, flows).
-    3> FlowConfigs1 = stepflow_agent:config(Flows).
-    4> {ok, Pid1} = supervisor:start_child(PidAgentSup1, [FlowConfigs1]).
-
-    5> {ok, PidAgentSup2} = supervisor:start_child(whereis(stepflow_sup), []).
-    6> FlowConfigs2 = stepflow_agent:config([{[], {stepflow_channel_memory,nope}, {stepflow_sink_message, Pid1}}]).
-    7> {ok, Pid2} = supervisor:start_child(PidAgentSup2, [FlowConfigs2]).
-
-    8> stepflow_agent:append(Pid2, hello).
-    9> stepflow_agent:pop(Pid1).
-    10> stepflow_agent:pop(Pid2).
-
-Run demo 3
-----------
-
-In this example, we use RabbitMQ as channel.
-
-    $ docker run -d --rm --hostname my-rabbit --name some-rabbit -p 5672:5672 -p 15672:15672 rabbitmq:3-management
-
-    $ rebar3 auto --sname pippo --apps stepflow --config priv/example.config
-
-    1> FlowConfigs = stepflow_agent:config([{[], {stepflow_channel_rabbitmq,#{port => 5672}}, {stepflow_sink_echo, nope}}]).
-    2> {ok, Pid1} = supervisor:start_child(whereis(stepflow_sup), []).
-    3> {ok, Pid2} = supervisor:start_child(Pid1, [FlowConfigs2]).
-    4> stepflow_agent:append(Pid2, <<"hello">>).

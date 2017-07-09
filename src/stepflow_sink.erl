@@ -8,14 +8,14 @@
 -author('Leonardo Rossi <leonardo.rossi@studenti.unipr.it>').
 
 -export([
-  init/2,
+  config/2,
   is_module/2,
   process/2
 ]).
 
--type skctx() :: #{module => atom(), ctx => ctx()}.
--type event() :: stepflow_agent:event().
 -type ctx()   :: any().
+-type event() :: stepflow_agent:event().
+-type skctx() :: #{module => atom(), ctx => ctx()}.
 
 %% Callbacks
 
@@ -29,8 +29,8 @@
 %% API
 %%====================================================================
 
--spec init(atom(), any()) -> {ok, skctx()}.
-init(Module, Ctx) ->
+-spec config(atom(), any()) -> {ok, skctx()}.
+config(Module, Ctx) ->
   {ok, Ctx2} = Module:handle_init(Ctx),
   {ok, #{module => Module, ctx => Ctx2}}.
 
