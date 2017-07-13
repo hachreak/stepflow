@@ -8,14 +8,15 @@
 -author('Leonardo Rossi <leonardo.rossi@studenti.unipr.it>').
 
 -export([
-  config/2,
+  config/3,
   is_module/2,
   process/2
 ]).
 
--type ctx()   :: any().
+-type ctx()   :: map().
 -type event() :: stepflow_agent:event().
--type skctx() :: #{module => atom(), ctx => ctx()}.
+-type inctx() :: stepflow_interceptor:ctx().
+-type skctx() :: #{module => atom(), ctx => ctx(), inctxs => list(inctx())}.
 
 %% Callbacks
 
@@ -29,14 +30,16 @@
 %% API
 %%====================================================================
 
--spec config(atom(), any()) -> {ok, skctx()}.
-config(Module, Ctx) ->
+-spec config(atom(), ctx(), list({atom(), inctx()})) -> {ok, skctx()}.
+config(Module, Ctx, InsConfig) ->
   {ok, Ctx2} = Module:handle_init(Ctx),
-  {ok, #{module => Module, ctx => Ctx2}}.
+  InCtxs = stepflow_interceptor:init_all(InsConfig),
+  {ok, #{module => Module, ctx => Ctx2, inctxs => InCtxs}}.
 
 -spec process(event(), skctx()) -> {ok, skctx()} | {error, term()}.
-process(Event, #{module := Module, ctx := Ctx}=SkCtx) ->
-  newctx(Module:handle_process(Event, Ctx), SkCtx).
+process(Event, #{inctxs := InCtxs, module := Module, ctx := Ctx}=SkCtx) ->
+  {Event2, InCtxs2} = stepflow_interceptor:transform(Event, InCtxs),
+  newctx(Module:handle_process(Event2, Ctx), SkCtx#{inctxs => InCtxs2}).
 
 -spec is_module(erlang:pid(), skctx()) -> boolean().
 is_module(Pid, #{module := Module, ctx := Ctx}) ->
