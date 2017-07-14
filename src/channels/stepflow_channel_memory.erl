@@ -99,6 +99,8 @@ pop(#{skctx := SinkCtx, memory := Memory}) ->
     {ok, SinkCtx2} ->
       % ack received, I can remove the event from memory
       {ok, #{skctx => SinkCtx2, memory => lists:droplast(Memory)}};
+    {reject, SinkCtx2} ->
+      {ok, #{skctx => SinkCtx2, memory => lists:droplast(Memory)}};
     {error, _}=Error ->
       % something goes wrong! Leave memory as it is.
       Error

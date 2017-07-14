@@ -152,17 +152,18 @@ handle_route(_) -> {error, disconnected}.
 
 process(Channel, Tag, Event, SinkCtx) ->
   case stepflow_sink:process(Event, SinkCtx) of
-    {ok, SinkCtx2} ->
-      % ack received, I can remove the event from memory
-      ok = amqp_channel:cast(Channel, #'basic.ack'{delivery_tag = Tag}),
-      {ok, SinkCtx2};
-      % {error, sink_fails};
+    {ok, SinkCtx2} -> ack_msg(Channel, Tag, SinkCtx2);
+    {reject, SinkCtx2} -> ack_msg(Channel, Tag, SinkCtx2);
     {error, _} ->
       % something goes wrong! Leave memory as it is.
       ok = amqp_channel:cast(Channel, #'basic.nack'{delivery_tag = Tag}),
       {error, sink_fails}
   end.
 
+ack_msg(Channel, Tag, SinkCtx) ->
+  % ack received, I can remove the event from memory
+  ok = amqp_channel:cast(Channel, #'basic.ack'{delivery_tag = Tag}),
+  {ok, SinkCtx}.
 
 disconnect(
     #{status := online, connection := Connection, channel := Channel}=Ctx) ->

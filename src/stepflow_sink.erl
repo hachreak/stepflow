@@ -36,10 +36,16 @@ config(Module, Ctx, InsConfig) ->
   InCtxs = stepflow_interceptor:init_all(InsConfig),
   {ok, #{module => Module, ctx => Ctx2, inctxs => InCtxs}}.
 
--spec process(event(), skctx()) -> {ok, skctx()} | {error, term()}.
+-spec process(event(), skctx()) ->
+    {ok, skctx()} | {error, term()} | {reject, skctx()}.
 process(Event, #{inctxs := InCtxs, module := Module, ctx := Ctx}=SkCtx) ->
-  {Event2, InCtxs2} = stepflow_interceptor:transform(Event, InCtxs),
-  newctx(Module:handle_process(Event2, Ctx), SkCtx#{inctxs => InCtxs2}).
+  case stepflow_interceptor:transform(Event, InCtxs) of
+    {ok, Event2, InCtxs2} ->
+      newctx(Module:handle_process(Event2, Ctx), SkCtx#{inctxs => InCtxs2});
+    {reject, InCtxs2} -> {reject, SkCtx#{inctxs => InCtxs2}}
+    % TODO {stop, Event, InCtxs}
+    % TODO {error, _}
+  end.
 
 -spec is_module(erlang:pid(), skctx()) -> boolean().
 is_module(Pid, #{module := Module, ctx := Ctx}) ->

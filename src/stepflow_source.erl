@@ -30,8 +30,13 @@ setup_channel(Pid, ChPid) -> gen_server:call(Pid, {setup_channel, ChPid}).
 
 -spec append(list(pid()), event(), list(inctx())) -> list(inctx()).
 append(PidChs, Event, InCtxs) ->
-  {Event2, InCtxs2} = stepflow_interceptor:transform(Event, InCtxs),
-  lists:foreach(fun(PidCh) ->
-      stepflow_channel:append(PidCh, Event2)
-    end, PidChs),
-  InCtxs2.
+  case stepflow_interceptor:transform(Event, InCtxs) of
+    {ok, Event2, InCtxs2} ->
+      lists:foreach(fun(PidCh) ->
+          ok = stepflow_channel:append(PidCh, Event2)
+        end, PidChs),
+      InCtxs2;
+    {reject, InCtxs2} -> InCtxs2
+    % TODO {stop, Event, InCtxs}
+    % TODO {error, _}
+  end.

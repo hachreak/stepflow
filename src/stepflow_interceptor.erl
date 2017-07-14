@@ -46,17 +46,25 @@ init_all(InterceptorsConfig) ->
       InterceptorCtx
     end, InterceptorsConfig).
 
--spec transform(event(), list(ctx())) -> {event(), list(ctx())}.
-transform(Event, InterceptorsCtx) ->
-  lists:foldr(fun(InterceptorCtx, {AccEvent, ItCtxs}) ->
-      {ok, AccEvent2, InterceptorCtx2} = intercept(AccEvent, InterceptorCtx),
-      {AccEvent2, [InterceptorCtx2 | ItCtxs]}
-    end, {Event, []}, InterceptorsCtx).
+-spec transform(event(), list(ctx())) ->
+    {ok, event(), list(ctx())} | {reject, list(ctx())}.
+transform(Event, []) -> {ok, Event, []};
+transform(Event, [ItCtx | Rest]) ->
+  transform(intercept(Event, ItCtx), Rest, []).
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
+transform({ok, Event, ItCtxOut}, [], []) -> {ok, Event, [ItCtxOut]};
+transform({ok, Event, ItCtxOut}, [], [ItCtxOuts]) ->
+  {ok, Event, [ItCtxOut | ItCtxOuts]};
+transform({ok, Event, ItCtxOut}, [ItCtxIn | Rest], ItCtxOuts) ->
+  transform(intercept(Event, ItCtxIn), Rest, [ItCtxOut | ItCtxOuts]);
+transform({reject, ItCtxOut}, ItCtxs, ItCtxOuts) ->
+  {reject, lists:flatten([[ItCtxOut], ItCtxs, ItCtxOuts])}.
+
 newctx({ok, Event, Ctx}, SrCtx) -> {ok, Event, SrCtx#{ctx := Ctx}};
 newctx({stop, Event, Ctx}, SrCtx) -> {stop, Event, SrCtx#{ctx := Ctx}};
+newctx({reject, Ctx}=Reject, SrCtx) -> {reject, SrCtx#{ctx := Ctx}};
 newctx({error, _}=Error, _) -> Error.
