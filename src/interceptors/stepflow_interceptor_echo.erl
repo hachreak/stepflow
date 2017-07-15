@@ -21,7 +21,7 @@
 handle_init(_) -> {ok, []}.
 
 -spec handle_intercept(event(), ctx()) ->
-    {ok, event(), ctx()} | {stop, event(), ctx()} | {error, term()}.
+    {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
 handle_intercept(Event, Ctx) ->
   io:format("Intercepted: ~p~n", [Event]),
   {ok, Event, Ctx}.

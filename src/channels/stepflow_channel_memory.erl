@@ -24,13 +24,14 @@
   config/1
 ]).
 
--type ctx()   :: list().
+-type ctx()   :: map().
 -type event() :: stepflow_channel:event().
 -type skctx() :: stepflow_channel:skctx().
 
 %% API
 
-config(Config) -> Config.
+-spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
+config(Config) -> {ok, Config}.
 
 %% Callbacks gen_server
 
@@ -38,7 +39,7 @@ config(Config) -> Config.
 start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
--spec init(list(ctx())) -> {ok, ctx()} | {error, term()}.
+-spec init(list(ctx())) -> {ok, ctx()}.
 init([Config]) ->
   % TODO enable in future if we need
   % erlang:start_timer(3000, self(), flush),
@@ -69,7 +70,7 @@ handle_cast(_, Ctx) ->
 
 handle_info({timeout, _, flush}, Ctx) ->
   io:format("Flush memory.. ~p~n", [maps:get(memory, Ctx)]),
-  Ctx2 = flush({ok, Ctx}),
+  Ctx2 = flush({ok, Ctx}, Ctx),
   erlang:start_timer(5000, self(), flush),
   {noreply, Ctx2};
 handle_info(_Info, Ctx) ->
@@ -85,11 +86,11 @@ code_change(_OldVsn, Ctx, _Extra) ->
 
 %% Private functions
 
-flush({error, empty, Ctx}) -> Ctx#{memory => []};
-flush({ok, Ctx}) -> flush(pop(Ctx)).
+flush({error, empty}, Ctx) -> Ctx#{memory => []};
+flush({ok, Ctx2}, _Ctx) -> flush(pop(Ctx2), Ctx2).
 
 -spec pop(ctx()) -> {ok, ctx()} | {error, term()}.
-pop(#{memory := []}=Ctx) -> {error, empty, Ctx};
+pop(#{memory := []}) -> {error, empty};
 pop(#{skctx := SinkCtx, memory := Memory}) ->
   io:format("memory: ~p~n", [Memory]),
   Event = lists:last(Memory),

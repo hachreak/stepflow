@@ -23,7 +23,7 @@
 -callback handle_init(ctx()) -> {ok, ctx()} | {error, term()}.
 
 -callback handle_intercept(event(), ctx()) ->
-    {ok, event(), ctx()} | {stop, event(), ctx()} | {error, term()}.
+    {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
 
 %%====================================================================
 %% API
@@ -35,9 +35,9 @@ init(Module, Ctx) ->
   {ok, #{module => Module, ctx => Ctx2}}.
 
 -spec intercept(event(), itctx()) ->
-    {ok, event(), ctx()} | {stop, event(), ctx()} | {error, term()}.
-intercept(Event, #{module := Module, ctx := Ctx}=SrCtx) ->
-  newctx(Module:handle_intercept(Event, Ctx), SrCtx).
+    {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
+intercept(Event, #{module := Module, ctx := Ctx}=ItCtx) ->
+  newctx(Module:handle_intercept(Event, Ctx), ItCtx).
 
 -spec init_all(list({atom(), ctx()})) -> list(ctx()).
 init_all(InterceptorsConfig) ->
@@ -57,14 +57,14 @@ transform(Event, [ItCtx | Rest]) ->
 %%====================================================================
 
 transform({ok, Event, ItCtxOut}, [], []) -> {ok, Event, [ItCtxOut]};
-transform({ok, Event, ItCtxOut}, [], [ItCtxOuts]) ->
+transform({ok, Event, ItCtxOut}, [], ItCtxOuts) ->
   {ok, Event, [ItCtxOut | ItCtxOuts]};
 transform({ok, Event, ItCtxOut}, [ItCtxIn | Rest], ItCtxOuts) ->
   transform(intercept(Event, ItCtxIn), Rest, [ItCtxOut | ItCtxOuts]);
 transform({reject, ItCtxOut}, ItCtxs, ItCtxOuts) ->
   {reject, lists:flatten([[ItCtxOut], ItCtxs, ItCtxOuts])}.
 
-newctx({ok, Event, Ctx}, SrCtx) -> {ok, Event, SrCtx#{ctx := Ctx}};
-newctx({stop, Event, Ctx}, SrCtx) -> {stop, Event, SrCtx#{ctx := Ctx}};
-newctx({reject, Ctx}=Reject, SrCtx) -> {reject, SrCtx#{ctx := Ctx}};
+newctx({ok, Event, Ctx}, ItCtx) -> {ok, Event, ItCtx#{ctx := Ctx}};
+% newctx({stop, Event, Ctx}, ItCtx) -> {stop, Event, ItCtx#{ctx := Ctx}};
+newctx({reject, Ctx}, ItCtx) -> {reject, ItCtx#{ctx := Ctx}};
 newctx({error, _}=Error, _) -> Error.

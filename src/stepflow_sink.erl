@@ -9,7 +9,6 @@
 
 -export([
   config/3,
-  is_module/2,
   process/2
 ]).
 
@@ -24,8 +23,6 @@
 
 -callback handle_process(event(), ctx()) -> {ok, ctx()} | {error, term()}.
 
--callback handle_is_module(erlang:pid(), ctx()) -> boolean().
-
 %%====================================================================
 %% API
 %%====================================================================
@@ -37,7 +34,7 @@ config(Module, Ctx, InsConfig) ->
   {ok, #{module => Module, ctx => Ctx2, inctxs => InCtxs}}.
 
 -spec process(event(), skctx()) ->
-    {ok, skctx()} | {error, term()} | {reject, skctx()}.
+    {ok, skctx()} | {reject, skctx()} | {error, term()}.
 process(Event, #{inctxs := InCtxs, module := Module, ctx := Ctx}=SkCtx) ->
   case stepflow_interceptor:transform(Event, InCtxs) of
     {ok, Event2, InCtxs2} ->
@@ -46,10 +43,6 @@ process(Event, #{inctxs := InCtxs, module := Module, ctx := Ctx}=SkCtx) ->
     % TODO {stop, Event, InCtxs}
     % TODO {error, _}
   end.
-
--spec is_module(erlang:pid(), skctx()) -> boolean().
-is_module(Pid, #{module := Module, ctx := Ctx}) ->
-  Module:handle_is_module(Pid, Ctx).
 
 %%====================================================================
 %% Internal functions

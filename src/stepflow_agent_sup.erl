@@ -45,7 +45,7 @@ start_link() ->
   supervisor:start_link(?MODULE, []).
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
--spec init([]) -> {ok, supervisor:sup_flags(), []}.
+-spec init([]) -> {ok, {supervisor:sup_flags(), []}}.
 init([]) ->
     {ok, { {one_for_one, 10, 10}, []} }.
 
@@ -55,7 +55,7 @@ init([]) ->
 
 -spec init_source(pid(), input(), list(pid())) -> pid().
 init_source(PidAgentSup1, {Source, Init}, PidCs) ->
-  Ctx = stepflow_source:config(Init),
+  {ok, Ctx} = stepflow_source:config(Init),
   {ok, PidS} = supervisor:start_child(
           PidAgentSup1, child("source", Source, Ctx)),
   lists:foreach(fun(PidC) ->
@@ -72,7 +72,7 @@ init_channels(PidAgentSup1, Outputs) ->
 
 -spec init_channel(pid(), integer(), output()) -> pid().
 init_channel(PidAgentSup1, Index, {Channel, Init, SkCtx}) ->
-  Ctx = Channel:config(Init),
+  {ok, Ctx} = Channel:config(Init),
   {ok, PidC} = supervisor:start_child(
           PidAgentSup1, child(name(channel, Index), Channel, Ctx)),
   ok = stepflow_channel:setup(PidC),

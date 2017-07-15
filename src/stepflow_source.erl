@@ -20,10 +20,10 @@
 %% API
 
 -spec config({list({atom(), inctx()}), ctx()}) ->
-    {ok, ctx()}  | {error, term()}.
+    {ok, ctx()} | {error, term()}.
 config({InterceptorsConfig, Ctx}) ->
   InCtxs = stepflow_interceptor:init_all(InterceptorsConfig),
-  Ctx#{inctxs => InCtxs}.
+  {ok, Ctx#{inctxs => InCtxs}}.
 
 -spec setup_channel(pid(), pid()) -> ok | {error, term()}.
 setup_channel(Pid, ChPid) -> gen_server:call(Pid, {setup_channel, ChPid}).

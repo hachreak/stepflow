@@ -11,7 +11,6 @@
 
 -export([
   handle_init/1,
-  handle_is_module/2,
   handle_process/2
 ]).
 
@@ -19,12 +18,9 @@
 -type ctx()   :: stepflow_sink:ctx().
 
 -spec handle_init(ctx()) -> {ok, ctx()} | {error, term()}.
-handle_init(_) -> {ok, []}.
+handle_init(_) -> {ok, #{}}.
 
--spec handle_process(event(), ctx()) -> {ok, ctx()}.
+-spec handle_process(event(), ctx()) -> {ok, ctx()} | {error, term()}.
 handle_process(Event, Ctx) ->
   io:format("Event received: ~p~n", [Event]),
   {ok, Ctx}.
-
--spec handle_is_module(erlang:pid(), ctx()) -> boolean().
-handle_is_module(_, _) -> true.

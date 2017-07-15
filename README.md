@@ -24,10 +24,15 @@ Run demo
 
     8> SrcCtx2 = {[{stepflow_interceptor_counter, {}}], #{}}.
     9> Input2 = {stepflow_source_message, SrcCtx2}.
-    10> {ok, SkCtx3} = stepflow_sink:config(stepflow_sink_message, PidS, [{stepflow_interceptor_counter, {}}]).
+    10> {ok, SkCtx3} = stepflow_sink:config(stepflow_sink_message, #{source => PidS}, [{stepflow_interceptor_counter, {}}]).
     11> ChCtx2 = {stepflow_channel_memory, #{}, SkCtx3}.
     12> Output2 = [ChCtx2].
     13> {PidSub2, PidS2, PidCs2} = stepflow_agent_sup:new(Input2, Output2).
 
     14> stepflow_source_message:append(PidS2, <<"hello">>).
 
+Status
+------
+
+The module is still quite unstable because the heavy development.
+The API could change until at least v0.1.0.

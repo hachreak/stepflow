@@ -31,7 +31,7 @@
 
 %% API
 
--spec sync_append(pid(), event()) -> ok.
+-spec sync_append(pid(), event()) -> ok | {noproc, any()}.
 sync_append(Pid, Event) ->
   gen_server:call(Pid, {append, Event}).
 
@@ -45,7 +45,7 @@ append(Pid, Event) ->
 start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
--spec init({ctx(), skctx()}) -> {ok, ctx()} | {error, term()}.
+-spec init(list(ctx())) -> {ok, ctx()}.
 init([Config]) -> {ok, Config#{channels => []}}.
 
 -spec handle_call({setup_channel, pid()}, {pid(), term()}, ctx()) ->

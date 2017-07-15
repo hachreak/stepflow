@@ -36,7 +36,7 @@
 start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
--spec init(list(ctx())) -> {ok, ctx()} | {error, term()}.
+-spec init(list(ctx())) -> {ok, ctx()}.
 init([Config]) ->
   {ok, Config#{status => offline}}.
 
@@ -109,14 +109,14 @@ code_change(_OldVsn, Ctx, _Extra) ->
 
 %% API
 
--spec config(ctx()) -> ctx().
+-spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
 config(Config) ->
   Host = maps:get(host, Config, "localhost"),
   Exchange = maps:get(exchange, Config, <<"stepflow_channel_rabbitmq">>),
   RoutingKey = maps:get(routing_key, Config, <<"stepflow_channel_rabbitmq">>),
   Port = maps:get(port, Config, 5672),
-  Config#{exchange => Exchange, routing_key => RoutingKey, durable => true,
-          host => Host, port => Port, queue => RoutingKey}.
+  {ok, Config#{exchange => Exchange, routing_key => RoutingKey, durable => true,
+          host => Host, port => Port, queue => RoutingKey}}.
 
 %% Private functions
 
@@ -150,6 +150,8 @@ handle_route(#{exchange := Exchange, channel := Channel, queue := Queue,
   {ok, Ctx};
 handle_route(_) -> {error, disconnected}.
 
+-spec process(any(), any(), event(), skctx()) ->
+    {ok, skctx()} | {error, term()}.
 process(Channel, Tag, Event, SinkCtx) ->
   case stepflow_sink:process(Event, SinkCtx) of
     {ok, SinkCtx2} -> ack_msg(Channel, Tag, SinkCtx2);

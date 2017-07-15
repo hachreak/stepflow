@@ -26,7 +26,7 @@ handle_init(_) ->
   {ok, #{eval => Eval, counter => 0}}.
 
 -spec handle_intercept(event(), ctx()) ->
-    {ok, event(), ctx()} | {stop, event(), ctx()} | {error, term()}.
+    {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
 handle_intercept(Event, #{eval := Eval, counter := Counter}=Ctx) ->
   Counter2 = inc(Eval(Event), Counter),
   io:format("Counter: ~p~n", [Counter2]),
@@ -36,4 +36,3 @@ handle_intercept(Event, #{eval := Eval, counter := Counter}=Ctx) ->
 
 inc(true, Counter) -> Counter + 1;
 inc(false, Counter) -> Counter.
-
