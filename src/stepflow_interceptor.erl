@@ -56,7 +56,6 @@ transform(Event, [ItCtx | Rest]) ->
 %% Internal functions
 %%====================================================================
 
-transform({ok, Event, ItCtxOut}, [], []) -> {ok, Event, [ItCtxOut]};
 transform({ok, Event, ItCtxOut}, [], ItCtxOuts) ->
   {ok, Event, [ItCtxOut | ItCtxOuts]};
 transform({ok, Event, ItCtxOut}, [ItCtxIn | Rest], ItCtxOuts) ->

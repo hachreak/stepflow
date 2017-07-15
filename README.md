@@ -36,16 +36,19 @@ Run demo 2
 
     $ rebar3 auto --sname pippo --apps stepflow --config priv/example.config
 
-    1> SrcCtx = {[{stepflow_interceptor_counter, {}}], #{}}.
-    2> Input = {stepflow_source_message, SrcCtx}.
-    3> {ok, SkCtx1} = stepflow_sink:config(stepflow_sink_echo, nope, [{stepflow_interceptor_echo, {}}]).
-    4> {ok, SkCtx2} = stepflow_sink:config(stepflow_sink_echo, nope, []).
-    5> ChCtx1 = {stepflow_channel_memory, #{}, SkCtx1}.
-    6> ChCtx2 = {stepflow_channel_rabbitmq, #{}, SkCtx2}.
-    7> Output = [ChCtx1, ChCtx2].
-    8> {PidSub, PidS, PidC} = stepflow_agent_sup:new(Input, Output).
+    1> Filter = fun(Event) -> Event == <<"filtered">> end.
+    2> SrcCtx = {[{stepflow_interceptor_filter, #{filter => Filter}}], #{}}.
+    3> Input = {stepflow_source_message, SrcCtx}.
+    4> {ok, SkCtx1} = stepflow_sink:config(stepflow_sink_echo, nope, [{stepflow_interceptor_echo, {}}]).
+    5> {ok, SkCtx2} = stepflow_sink:config(stepflow_sink_echo, nope, []).
+    6> ChCtx1 = {stepflow_channel_memory, #{}, SkCtx1}.
+    7> ChCtx2 = {stepflow_channel_rabbitmq, #{}, SkCtx2}.
+    8> Output = [ChCtx1, ChCtx2].
+    9> {PidSub, PidS, PidC} = stepflow_agent_sup:new(Input, Output).
 
-    9> stepflow_source_message:append(PidS, <<"hello">>).
+    > stepflow_source_message:append(PidS, <<"hello">>).
+    > % filtered message!
+    > stepflow_source_message:append(PidS, <<"filtered">>).
 
 Status
 ------
