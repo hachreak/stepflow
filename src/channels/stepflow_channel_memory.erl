@@ -21,17 +21,25 @@
 ]).
 
 -export([
-  config/1
+  ack/1,
+  config/1,
+  nack/1
 ]).
 
 -type ctx()   :: map().
 -type event() :: stepflow_channel:event().
 -type skctx() :: stepflow_channel:skctx().
 
-%% API
+%% Callbacks channel
 
 -spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
 config(Config) -> {ok, Config}.
+
+-spec ack(ctx()) -> {ok, ctx()}.
+ack(#{memory := Memory}=Ctx) -> {ok, Ctx#{memory => lists:droplast(Memory)}}.
+
+-spec nack(ctx()) -> {ok, ctx()}.
+nack(Ctx)-> {ok, Ctx}.
 
 %% Callbacks gen_server
 
@@ -91,18 +99,6 @@ flush({ok, Ctx2}, _Ctx) -> flush(pop(Ctx2), Ctx2).
 
 -spec pop(ctx()) -> {ok, ctx()} | {error, term()}.
 pop(#{memory := []}) -> {error, empty};
-pop(#{skctx := SinkCtx, memory := Memory}) ->
+pop(#{memory := Memory}=Ctx) ->
   io:format("memory: ~p~n", [Memory]),
-  Event = lists:last(Memory),
-  % get event
-  % execute the fun (e.g. move to anothe channel)
-  case stepflow_sink:process(Event, SinkCtx) of
-    {ok, SinkCtx2} ->
-      % ack received, I can remove the event from memory
-      {ok, #{skctx => SinkCtx2, memory => lists:droplast(Memory)}};
-    {reject, SinkCtx2} ->
-      {ok, #{skctx => SinkCtx2, memory => lists:droplast(Memory)}};
-    {error, _}=Error ->
-      % something goes wrong! Leave memory as it is.
-      Error
-  end.
+  stepflow_channel:route(?MODULE, lists:last(Memory), Ctx).

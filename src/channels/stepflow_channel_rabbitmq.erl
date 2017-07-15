@@ -23,7 +23,9 @@
 ]).
 
 -export([
-  config/1
+  ack/1,
+  config/1,
+  nack/1
 ]).
 
 -type ctx()   :: map().
@@ -42,9 +44,11 @@ init([Config]) ->
 
 -spec handle_call(setup | {connect_sink, skctx()}, {pid(), term()}, ctx()) ->
     {reply, ok, ctx()}.
+% @doc setup connection with the rabbitmq server @end
 handle_call(setup, _From, Ctx) ->
   Ctx2 = handle_connect(Ctx),
   {reply, ok, Ctx2};
+% @doc connect to the sink @end
 handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
   case handle_route(Ctx#{skctx => SinkCtx}) of
     {error, _}=Error -> {reply, Error, Ctx};
@@ -54,6 +58,7 @@ handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
 
 -spec handle_cast({append, event()}, ctx()) -> {noreply, ctx()}.
+% @doc append a new message inside the queue @end
 handle_cast({append, Event}, #{exchange:=Exchange, routing_key:=RoutingKey,
                                channel:=Channel}=Ctx) ->
   amqp_channel:cast(Channel, #'basic.publish'{
@@ -70,11 +75,12 @@ handle_info(#'basic.cancel_ok'{}, Ctx) ->
   %% This is received when the subscription is cancelled
   Ctx2 = disconnect(Ctx),
   {noreply, Ctx2};
+% @doc new message to deliver to the sink. @end
 handle_info({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Event}},
-            #{channel := Channel, skctx := SinkCtx}=Ctx) ->
+            Ctx) ->
   %% A delivery
-  case process(Channel, Tag, Event, SinkCtx) of
-    {ok, SinkCtx2} -> {noreply, Ctx#{skctx => SinkCtx2}};
+  case stepflow_channel:route(?MODULE, Event, Ctx#{tag => Tag}) of
+    {ok, Ctx2} -> {noreply, Ctx2};
     {error, sink_fails} ->
       Ctx2 = disconnect(Ctx),
       {noreply, Ctx2}
@@ -89,8 +95,6 @@ terminate(_Reason, _Ctx) ->
 code_change(_OldVsn, Ctx, _Extra) ->
   io:format("code changed !"),
   {ok, Ctx}.
-
-%% Callbacks channel
 
 % -spec pop(skctx(), ctx()) -> {ok, skctx(), ctx()} | {error, term()}.
 % pop(_SinkCtx, _Ctx) ->
@@ -107,7 +111,7 @@ code_change(_OldVsn, Ctx, _Extra) ->
 %   %     end
 %   % end.
 
-%% API
+%% Callbacks channel
 
 -spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
 config(Config) ->
@@ -117,6 +121,16 @@ config(Config) ->
   Port = maps:get(port, Config, 5672),
   {ok, Config#{exchange => Exchange, routing_key => RoutingKey, durable => true,
           host => Host, port => Port, queue => RoutingKey}}.
+
+-spec ack(ctx()) -> {ok, ctx()}.
+% @doc ack received, I can remove the event from memory. @end
+ack(#{channel := Channel, tag := Tag}=Ctx) ->
+  ok = amqp_channel:cast(Channel, #'basic.ack'{delivery_tag = Tag}),
+  {ok, maps:remove(tag, Ctx)}.
+
+-spec nack(ctx()) -> {ok, ctx()}.
+% @doc nack received, leave the event inside the memory. @end
+nack(Ctx)-> {ok, Ctx}.
 
 %% Private functions
 
@@ -150,23 +164,9 @@ handle_route(#{exchange := Exchange, channel := Channel, queue := Queue,
   {ok, Ctx};
 handle_route(_) -> {error, disconnected}.
 
--spec process(any(), any(), event(), skctx()) ->
-    {ok, skctx()} | {error, term()}.
-process(Channel, Tag, Event, SinkCtx) ->
-  case stepflow_sink:process(Event, SinkCtx) of
-    {ok, SinkCtx2} -> ack_msg(Channel, Tag, SinkCtx2);
-    {reject, SinkCtx2} -> ack_msg(Channel, Tag, SinkCtx2);
-    {error, _} ->
-      % something goes wrong! Leave memory as it is.
-      ok = amqp_channel:cast(Channel, #'basic.nack'{delivery_tag = Tag}),
-      {error, sink_fails}
-  end.
+% Private functions
 
-ack_msg(Channel, Tag, SinkCtx) ->
-  % ack received, I can remove the event from memory
-  ok = amqp_channel:cast(Channel, #'basic.ack'{delivery_tag = Tag}),
-  {ok, SinkCtx}.
-
+-spec disconnect(ctx()) -> ctx().
 disconnect(
     #{status := online, connection := Connection, channel := Channel}=Ctx) ->
   %% Close the channel
