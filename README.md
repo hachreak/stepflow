@@ -48,7 +48,7 @@ Two agents connected:
 Run demo 2
 ----------
 
-One sink and two channels (memory and rabbitmq):
+One source and two sinks (passing from memory and rabbitmq):
 
     $ rebar3 auto --sname pippo --apps stepflow --config priv/example.config
 
