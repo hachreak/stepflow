@@ -14,7 +14,7 @@
   handle_process/2
 ]).
 
--type event() :: stepflow_sink:event().
+-type event() :: stepflow_event:event().
 -type ctx()   :: stepflow_sink:ctx().
 
 -spec handle_init(ctx()) -> {ok, ctx()} | {error, term()}.

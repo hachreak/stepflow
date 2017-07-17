@@ -14,7 +14,7 @@
   transform/2
 ]).
 
--type event() :: stepflow_agent:event().
+-type event() :: stepflow_event:event().
 -type ctx()   :: any().
 -type itctx() :: #{module => atom(), ctx => ctx()}.
 

@@ -13,7 +13,7 @@
 ]).
 
 -type ctx()   :: map().
--type event() :: stepflow_agent:event().
+-type event() :: stepflow_event:event().
 -type inctx() :: stepflow_interceptor:ctx().
 -type skctx() :: #{module => atom(), ctx => ctx(), inctxs => list(inctx())}.
 

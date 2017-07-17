@@ -29,7 +29,7 @@
 ]).
 
 -type ctx()   :: map().
--type event() :: stepflow_channel:event().
+-type event() :: stepflow_event:event().
 -type skctx() :: stepflow_channel:skctx().
 
 %% Callbacks gen_server

@@ -26,8 +26,7 @@
 ]).
 
 -type ctx()   :: stepflow_source:ctx().
--type event() :: stepflow_channel:event().
--type skctx() :: stepflow_sink:ctx().
+-type event() :: stepflow_event:event().
 
 %% API
 

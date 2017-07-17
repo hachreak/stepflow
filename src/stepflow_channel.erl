@@ -18,7 +18,7 @@
 -export_type([event/0]).
 
 -type ctx()   :: map().
--type event() :: #{headers => map(), body => any()}.
+-type event() :: stepflow_event:event().
 -type skctx() :: stepflow_sink:ctx().
 
 %% Callbacks

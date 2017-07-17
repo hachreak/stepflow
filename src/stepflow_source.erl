@@ -14,7 +14,7 @@
 ]).
 
 -type ctx()   :: map().
--type event() :: stepflow_agent:event().
+-type event() :: stepflow_event:event().
 -type inctx() :: stepflow_interceptor:ctx().
 
 %% API
