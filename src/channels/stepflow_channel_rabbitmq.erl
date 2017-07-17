@@ -39,8 +39,10 @@ start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
 -spec init(list(ctx())) -> {ok, ctx()}.
+init([#{encoder := _}=Config]) ->
+  {ok, Config#{status => offline}};
 init([Config]) ->
-  {ok, Config#{status => offline}}.
+  init([Config#{encoder => stepflow_encoder_json}]).
 
 -spec handle_call(setup | {connect_sink, skctx()}, {pid(), term()}, ctx()) ->
     {reply, ok, ctx()}.
@@ -60,10 +62,10 @@ handle_call(Input, _From, Ctx) ->
 -spec handle_cast({append, event()}, ctx()) -> {noreply, ctx()}.
 % @doc append a new message inside the queue @end
 handle_cast({append, Event}, #{exchange:=Exchange, routing_key:=RoutingKey,
-                               channel:=Channel}=Ctx) ->
+                               channel:=Channel, encoder := Encoder}=Ctx) ->
   amqp_channel:cast(Channel, #'basic.publish'{
       exchange=Exchange, routing_key=RoutingKey
-    }, #amqp_msg{payload=Event}),
+    }, #amqp_msg{payload=Encoder:encode(Event)}),
   {noreply, Ctx};
 handle_cast(_, Ctx) ->
   {noreply, Ctx}.
@@ -76,10 +78,11 @@ handle_info(#'basic.cancel_ok'{}, Ctx) ->
   Ctx2 = disconnect(Ctx),
   {noreply, Ctx2};
 % @doc new message to deliver to the sink. @end
-handle_info({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Event}},
-            Ctx) ->
+handle_info({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
+            #{encoder := Encoder}=Ctx) ->
   %% A delivery
-  case stepflow_channel:route(?MODULE, Event, Ctx#{tag => Tag}) of
+  case stepflow_channel:route(?MODULE, Encoder:decode(Binary),
+                              Ctx#{tag => Tag}) of
     {ok, Ctx2} -> {noreply, Ctx2};
     {error, sink_fails} ->
       Ctx2 = disconnect(Ctx),
