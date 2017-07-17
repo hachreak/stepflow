@@ -9,6 +9,7 @@
 
 -export([
   body/1,
+  header/3,
   new/2
 ]).
 
@@ -24,3 +25,7 @@ new(Headers, Body) -> #{headers => Headers, body => Body}.
 
 -spec body(event()) -> body().
 body(#{body := Body}) -> Body.
+
+-spec header(binary() | string() | atom(), any(), event()) -> event().
+header(Name, Value, #{headers := Headers}=Event) ->
+  Event#{headers => Headers#{Name => Value}}.

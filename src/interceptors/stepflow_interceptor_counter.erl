@@ -18,19 +18,21 @@
 -type ctx()   :: stepflow_interceptor:ctx().
 
 -spec handle_init(ctx()) -> {ok, ctx()} | {error, term()}.
-handle_init({Module, Fun}) ->
-  Eval = fun(Event) -> Module:Fun(Event) end,
-  {ok, #{eval => Eval, counter => 0}};
-handle_init(_) ->
+handle_init(#{eval := Eval}=Ctx) ->
+  Header = maps:get(header, Ctx, counter),
+  {ok, #{eval => Eval, counter => 0, header => Header}};
+handle_init(Ctx) ->
   Eval = fun(_) -> true end,
-  {ok, #{eval => Eval, counter => 0}}.
+  handle_init(Ctx#{eval => Eval}).
 
 -spec handle_intercept(event(), ctx()) ->
     {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
-handle_intercept(Event, #{eval := Eval, counter := Counter}=Ctx) ->
+handle_intercept(Event, #{eval := Eval, header := Header,
+                          counter := Counter}=Ctx) ->
   Counter2 = inc(Eval(Event), Counter),
+  Event2 = stepflow_event:header(Header, Counter2, Event),
   io:format("Counter: ~p~n", [Counter2]),
-  {ok, Event, Ctx#{counter => Counter2}}.
+  {ok, Event2, Ctx#{counter => Counter2}}.
 
 %% Private functions
 
