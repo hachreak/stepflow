@@ -51,12 +51,12 @@ pop(Pid) -> gen_server:cast(Pid, pop).
 -spec append(pid(), event()) -> ok.
 append(Pid, Event) -> gen_server:cast(Pid, {append, Event}).
 
--spec route(atom(), event(), ctx()) -> {ok, ctx()} | {error, term()}.
+-spec route(atom(), event() | list(event()), ctx()) ->
+    {ok, ctx()} | {error, term()}.
+route(_, [], Ctx) -> {ok, Ctx};
 route(Module, Event, #{skctx := SinkCtx}=Ctx) ->
   case stepflow_sink:process(Event, SinkCtx) of
     {ok, SinkCtx2} -> Module:ack(Ctx#{skctx => SinkCtx2});
-    {reject, SinkCtx2} ->
-      Module:ack(Ctx#{skctx => SinkCtx2});
     {error, _} ->
       % something goes wrong! Leave memory as it is.
       Module:nack(Ctx),

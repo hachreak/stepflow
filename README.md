@@ -74,9 +74,9 @@ Count the events `<<"hello">>`:
     1> Filter = fun(#{body := Body}) -> Body =:= <<"hello">> end.
     2> SrcCtx = {[{stepflow_interceptor_counter, #{header => mycounter, eval => Filter}}, {stepflow_interceptor_echo, #{}}], #{}}.
     3> Input = {stepflow_source_message, SrcCtx}.
-    4> {ok, SkCtx2} = stepflow_sink:config(stepflow_sink_echo, nope, [{stepflow_interceptor_echo, {}}]).
-    5> ChCtx2 = {stepflow_channel_rabbitmq, #{}, SkCtx2}.
-    6> Output = [ChCtx2].
+    4> {ok, SkCtx} = stepflow_sink:config(stepflow_sink_echo, nope, [{stepflow_interceptor_echo, {}}]).
+    5> ChCtx = {stepflow_channel_rabbitmq, #{}, SkCtx}.
+    6> Output = [ChCtx].
     7>{PidSub, PidS, PidC} = stepflow_agent_sup:new(Input, Output).
 
     # One event that is counted
@@ -84,6 +84,24 @@ Count the events `<<"hello">>`:
 
     # One event that is NOT counted
     stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"skip">>)).
+
+Run demo 4
+----------
+
+Handle bulk of 7 events with a window of 10 seconds:
+
+    1> SrcCtx = {[{stepflow_interceptor_counter, #{}}], #{}}.
+    2> Input = {stepflow_source_message, SrcCtx}.
+    3> {ok, SkCtx} = stepflow_sink:config(stepflow_sink_echo, #{}, []).
+    4> ChCtx = {stepflow_channel_mnesia, #{flush_period => 10, capacity => 7}, SkCtx}.
+    5> Output = [ChCtx].
+    6> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
+
+    # send multiple message quickly!
+    7> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
+    8> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
+    9> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
+
 
 Note
 ----

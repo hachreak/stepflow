@@ -33,20 +33,28 @@ config(Module, Ctx, InsConfig) ->
   InCtxs = stepflow_interceptor:init_all(InsConfig),
   {ok, #{module => Module, ctx => Ctx2, inctxs => InCtxs}}.
 
--spec process(event(), skctx()) ->
-    {ok, skctx()} | {reject, skctx()} | {error, term()}.
-process(Event, #{inctxs := InCtxs, module := Module, ctx := Ctx}=SkCtx) ->
-  case stepflow_interceptor:transform(Event, InCtxs) of
-    {ok, Event2, InCtxs2} ->
-      newctx(Module:handle_process(Event2, Ctx), SkCtx#{inctxs => InCtxs2});
-    {reject, InCtxs2} -> {reject, SkCtx#{inctxs => InCtxs2}}
-    % TODO {stop, Event, InCtxs}
-    % TODO {error, _}
-  end.
+-spec process(event(), skctx()) -> {ok, skctx()} | {error, term()}.
+process([Event | Rest], SkCtx) ->
+  flush_all(Rest, flush(Event, SkCtx));
+process(Event, SkCtx) -> flush(Event, SkCtx).
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+flush_all(_, {error, _}=Error) -> Error;
+flush_all([], Result) -> Result;
+flush_all([Event | Rest], {ok, SkCtx}) ->
+  flush_all(Rest, flush(Event, SkCtx)).
+
+flush(Event, #{inctxs := InCtxs, module := Module, ctx := Ctx}=SkCtx) ->
+  case stepflow_interceptor:transform(Event, InCtxs) of
+    {ok, Event2, InCtxs2} ->
+      newctx(Module:handle_process(Event2, Ctx), SkCtx#{inctxs => InCtxs2});
+    {reject, InCtxs2} -> {ok, SkCtx#{inctxs => InCtxs2}}
+    % TODO {stop, Event, InCtxs}
+    % TODO {error, _}
+  end.
 
 newctx({ok, Ctx}, SkCtx) -> {ok, SkCtx#{ctx := Ctx}};
 newctx({error, Error}, _SkCtx) -> {error, Error}.
