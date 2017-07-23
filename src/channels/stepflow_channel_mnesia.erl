@@ -82,10 +82,8 @@ handle_cast({append, Event}, #{table := Table}=Ctx) ->
   % stepflow_channel:pop(self()),
   {noreply, Ctx};
 handle_cast(pop, Ctx) ->
-  case flush(Ctx) of
-    {error, _} -> {noreply, Ctx};
-    {ok, Ctx2} -> {noreply, Ctx2}
-  end;
+  {ok, Ctx2} = flush(Ctx),
+  {noreply, Ctx2};
 handle_cast(_, Ctx) ->
   {noreply, Ctx}.
 
