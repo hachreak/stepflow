@@ -53,14 +53,14 @@ handle_call({setup_channel, ChPid}, _From, #{channels := Channels}=Ctx) ->
   {reply, ok, Ctx#{channels => [ChPid | Channels]}};
 handle_call({append, Event}, _From,
             #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
-  InCtxs2 = stepflow_source:append(ChPids, Event, InCtxs),
+  {ok, InCtxs2} = stepflow_source:append(ChPids, Event, InCtxs),
   {reply, ok, Ctx#{inctxs := InCtxs2}};
 handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
 
 -spec handle_cast({append, event()}, ctx()) -> {noreply, ctx()}.
 handle_cast({append, Event}, #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
-  InCtxs2 = stepflow_source:append(ChPids, Event, InCtxs),
+  {ok, InCtxs2} = stepflow_source:append(ChPids, Event, InCtxs),
   {noreply, Ctx#{inctxs := InCtxs2}};
 handle_cast(_, Ctx) ->
   {noreply, Ctx}.

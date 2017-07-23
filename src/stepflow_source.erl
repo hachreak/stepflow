@@ -28,15 +28,16 @@ config({InterceptorsConfig, Ctx}) ->
 -spec setup_channel(pid(), pid()) -> ok | {error, term()}.
 setup_channel(Pid, ChPid) -> gen_server:call(Pid, {setup_channel, ChPid}).
 
--spec append(list(pid()), event(), list(inctx())) -> list(inctx()).
+-spec append(list(pid()), event(), list(inctx())) -> {ok, list(inctx())}.
 append(PidChs, Event, InCtxs) ->
   case stepflow_interceptor:transform(Event, InCtxs) of
     {ok, Event2, InCtxs2} ->
       lists:foreach(fun(PidCh) ->
+          % TODO check message is successfully stored in channel
           ok = stepflow_channel:append(PidCh, Event2)
         end, PidChs),
-      InCtxs2;
-    {reject, InCtxs2} -> InCtxs2
+      {ok, InCtxs2};
+    {reject, InCtxs2} -> {ok, InCtxs2}
     % TODO {stop, Event, InCtxs}
     % TODO {error, _}
   end.
