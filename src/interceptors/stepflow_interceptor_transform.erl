@@ -27,6 +27,10 @@ handle_init(_) ->
 -spec handle_intercept(event(), ctx()) ->
     {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
 handle_intercept(Event, #{eval := Eval}=Ctx) ->
-  Transformed = Eval(Event),
-  io:format("Transform: ~p~n", [Transformed]),
-  {ok, Transformed, Ctx}.
+  case Eval(Event) of
+    {ok, Transformed} ->
+      io:format("Transform: ~p~n", [Transformed]),
+      {ok, Transformed, Ctx};
+    reject -> {reject, Ctx};
+    {error, _}=Error -> Error
+  end.

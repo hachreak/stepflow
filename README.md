@@ -102,6 +102,21 @@ Handle bulk of 7 events with a window of 10 seconds:
     8> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
     9> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
 
+Run demo 5
+----------
+
+Filter <<"hello">> events:
+
+    1> Fun = fun(#{body := Body}=Event) -> case Body =:= <<"hello">> of false -> {ok, stepflow_event:header(check, true, Event)}; _ -> reject end end.
+    2> SrcCtx = {[{stepflow_interceptor_transform, #{eval => Fun}}], #{}}.
+    3> Input = {stepflow_source_message, SrcCtx}.
+    4> {ok, SkCtx} = stepflow_sink:config(stepflow_sink_echo, #{}, []).
+    5> ChCtx = {stepflow_channel_mnesia, #{flush_period => 10, capacity => 7, table => pippo}, SkCtx}.
+    6> Output = [ChCtx].
+    7> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
+
+    8> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
+    9> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"this is passing">>)).
 
 Note
 ----
