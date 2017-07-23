@@ -93,7 +93,7 @@ Handle bulk of 7 events with a window of 10 seconds:
     1> SrcCtx = {[{stepflow_interceptor_counter, #{}}], #{}}.
     2> Input = {stepflow_source_message, SrcCtx}.
     3> {ok, SkCtx} = stepflow_sink:config(stepflow_sink_echo, #{}, []).
-    4> ChCtx = {stepflow_channel_mnesia, #{flush_period => 10, capacity => 7}, SkCtx}.
+    4> ChCtx = {stepflow_channel_mnesia, #{flush_period => 10, capacity => 7, table => mytable}, SkCtx}.
     5> Output = [ChCtx].
     6> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
 

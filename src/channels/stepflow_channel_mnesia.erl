@@ -40,11 +40,13 @@
 config(#{}=Config) ->
   FlushPeriod = maps:get(flush_period, Config, 3000),
   Capacity = maps:get(capacity, Config, 5),
-  {ok, Config#{flush_period => FlushPeriod, capacity => Capacity}}.
+  Table = maps:get(table, Config, stepflow_channel_mnesia_events),
+  {ok, Config#{flush_period => FlushPeriod, capacity => Capacity,
+               table => Table}}.
 
 -spec ack(ctx()) -> {ok, ctx()}.
-ack(#{records := Bulk}=Ctx) ->
-  [mnesia:delete_object(R) || R <- Bulk],
+ack(#{records := Bulk, table := Table}=Ctx) ->
+  [mnesia:delete({Table, R#stepflow_channel_mnesia_events.timestamp}) || R <- Bulk],
   {ok, maps:remove(records, Ctx)}.
 
 -spec nack(ctx()) -> {ok, ctx()}.
@@ -57,9 +59,9 @@ start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
 -spec init(list(ctx())) -> {ok, ctx()}.
-init([#{flush_period := FlushPeriod}=Config]) ->
+init([#{flush_period := FlushPeriod, table := Table}=Config]) ->
   create_schema(),
-  create_table(),
+  create_table(Table),
   erlang:start_timer(FlushPeriod, self(), flush),
   {ok, Config}.
 
@@ -74,8 +76,8 @@ handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
 
 -spec handle_cast({append, event()} | pop, ctx()) -> {noreply, ctx()}.
-handle_cast({append, Event}, Ctx) ->
-  write(Event),
+handle_cast({append, Event}, #{table := Table}=Ctx) ->
+  write(Table, Event),
   maybe_pop(Ctx),
   % stepflow_channel:pop(self()),
   {noreply, Ctx};
@@ -109,10 +111,11 @@ create_schema() ->
   mnesia:create_schema([node()]),
   application:start(mnesia).
 
-create_table() ->
-  ok = case mnesia:create_table(stepflow_channel_mnesia_events, [
+create_table(Table) ->
+  ok = case mnesia:create_table(Table, [
         {type, ordered_set},
         {attributes, record_info(fields, stepflow_channel_mnesia_events)},
+        {record_name, stepflow_channel_mnesia_events},
         {disc_copies, [node()]}
       ]) of
     {atomic, ok} -> ok;
@@ -121,20 +124,20 @@ create_table() ->
   end,
   % ok = mnesia:add_table_copy(
   %        stepflow_channel_mnesia_events, node(), disc_copy),
-  ok = mnesia:wait_for_tables([stepflow_channel_mnesia_events], 5000).
+  ok = mnesia:wait_for_tables([Table], 5000).
 
-write(Event) ->
+write(Table, Event) ->
   mnesia:activity(transaction, fun() ->
-      mnesia:write(#stepflow_channel_mnesia_events{
+      mnesia:write(Table, #stepflow_channel_mnesia_events{
                       timestamp=os:timestamp(), event=Event
-        })
+        }, write)
     end).
 
 -spec flush(ctx()) -> {ok, ctx()} | {error, term()}.
-flush(#{capacity := Capacity}=Ctx) ->
+flush(#{capacity := Capacity, table := Table}=Ctx) ->
   % CatchAll = [{'_',[],['$_']}],
   {ok, _} = mnesia:activity(transaction, fun() ->
-      Bulk = qlc:eval(catch_all(), [{max_list_size, Capacity}]),
+      Bulk = qlc:eval(catch_all(Table), [{max_list_size, Capacity}]),
       % TODO check if bulk is empty!
       % process a bulk of events
       {ok, _} = stepflow_channel:route(
@@ -142,12 +145,12 @@ flush(#{capacity := Capacity}=Ctx) ->
             Ctx#{records => Bulk})
     end).
 
-maybe_pop(#{capacity := Capacity}=Ctx) ->
-  case mnesia:table_info(stepflow_channel_mnesia_events, size) > Capacity of
+maybe_pop(#{capacity := Capacity, table := Table}=Ctx) ->
+  case mnesia:table_info(Table, size) > Capacity of
     true -> flush(Ctx);
     false -> ok
   end.
 
 % TODO limit max size of events
-catch_all() ->
-  qlc:q([R || R <- mnesia:table(stepflow_channel_mnesia_events)]).
+catch_all(Table) ->
+  qlc:q([R || R <- mnesia:table(Table)]).
