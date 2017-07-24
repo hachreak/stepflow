@@ -32,7 +32,7 @@
 -type event() :: stepflow_event:event().
 -type skctx() :: stepflow_channel:skctx().
 
--record(stepflow_channel_mnesia_events, {timestamp, event}).
+-record(stepflow_channel_mnesia_events, {timestamp, events}).
 
 %% Callbacks channel
 
@@ -46,7 +46,8 @@ config(#{}=Config) ->
 
 -spec ack(ctx()) -> {ok, ctx()}.
 ack(#{records := Bulk, table := Table}=Ctx) ->
-  [mnesia:delete({Table, R#stepflow_channel_mnesia_events.timestamp}) || R <- Bulk],
+  [mnesia:delete(
+     {Table, R#stepflow_channel_mnesia_events.timestamp}) || R <- Bulk],
   {ok, maps:remove(records, Ctx)}.
 
 -spec nack(ctx()) -> {ok, ctx()}.
@@ -75,9 +76,9 @@ handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
 handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
 
--spec handle_cast({append, event()} | pop, ctx()) -> {noreply, ctx()}.
-handle_cast({append, Event}, #{table := Table}=Ctx) ->
-  write(Table, Event),
+-spec handle_cast({append, list(event())} | pop, ctx()) -> {noreply, ctx()}.
+handle_cast({append, Events}, #{table := Table}=Ctx) ->
+  write(Table, Events),
   maybe_pop(Ctx),
   % stepflow_channel:pop(self()),
   {noreply, Ctx};
@@ -124,10 +125,10 @@ create_table(Table) ->
   %        stepflow_channel_mnesia_events, node(), disc_copy),
   ok = mnesia:wait_for_tables([Table], 5000).
 
-write(Table, Event) ->
+write(Table, Events) ->
   mnesia:activity(transaction, fun() ->
       mnesia:write(Table, #stepflow_channel_mnesia_events{
-                      timestamp=os:timestamp(), event=Event
+                      timestamp=os:timestamp(), events=Events
         }, write)
     end).
 
@@ -139,7 +140,7 @@ flush(#{capacity := Capacity, table := Table}=Ctx) ->
       % TODO check if bulk is empty!
       % process a bulk of events
       {ok, _} = stepflow_channel:route(
-            ?MODULE, [R#stepflow_channel_mnesia_events.event || R <- Bulk],
+            ?MODULE, [R#stepflow_channel_mnesia_events.events || R <- Bulk],
             Ctx#{records => Bulk})
     end).
 

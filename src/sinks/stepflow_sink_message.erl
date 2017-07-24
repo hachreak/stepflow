@@ -20,11 +20,11 @@
 -spec handle_init(ctx()) -> {ok, ctx()} | {error, term()}.
 handle_init(#{source := _Pid}=Ctx) -> {ok, Ctx}.
 
--spec handle_process(event(), ctx()) -> {ok, ctx()}.
-handle_process(Event, #{source := Pid}=Ctx) ->
-  case stepflow_source_message:sync_append(Pid, Event) of
+-spec handle_process(list(event()), ctx()) -> {ok, ctx()}.
+handle_process(Events, #{source := Pid}=Ctx) ->
+  case stepflow_source_message:sync_append(Pid, Events) of
     ok ->
-      io:format("Event send to ~p: ~p~n", [Pid, Event]),
+      io:format("Events send to ~p: ~p~n", [Pid, Events]),
       {ok, Ctx};
     _ -> {error, source_unreachable}
   end.

@@ -30,13 +30,15 @@
 
 %% API
 
--spec sync_append(pid(), event()) -> ok | {noproc, any()}.
-sync_append(Pid, Event) ->
-  gen_server:call(Pid, {append, Event}).
+-spec sync_append(pid(), event() | list(event())) -> ok | {noproc, any()}.
+sync_append(Pid, Events) when is_list(Events) ->
+  gen_server:call(Pid, {append, Events});
+sync_append(Pid, Events) -> sync_append(Pid, [Events]).
 
--spec append(pid(), event()) -> ok.
-append(Pid, Event) ->
-  gen_server:cast(Pid, {append, Event}).
+-spec append(pid(), event() | list(event())) -> ok.
+append(Pid, Events) when is_list(Events) ->
+  gen_server:cast(Pid, {append, Events});
+append(Pid, Event) -> append(Pid, [Event]).
 
 %% Callbacks gen_server
 
@@ -47,20 +49,21 @@ start_link(Config) ->
 -spec init(list(ctx())) -> {ok, ctx()}.
 init([Config]) -> {ok, Config#{channels => []}}.
 
--spec handle_call({setup_channel, pid()}, {pid(), term()}, ctx()) ->
+-spec handle_call({setup_channel, pid()} |
+                  {append, list(event())}, {pid(), term()}, ctx()) ->
     {reply, ok, ctx()}.
 handle_call({setup_channel, ChPid}, _From, #{channels := Channels}=Ctx) ->
   {reply, ok, Ctx#{channels => [ChPid | Channels]}};
-handle_call({append, Event}, _From,
+handle_call({append, Events}, _From,
             #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
-  {ok, InCtxs2} = stepflow_source:append(ChPids, Event, InCtxs),
+  {ok, InCtxs2} = stepflow_source:append(ChPids, Events, InCtxs),
   {reply, ok, Ctx#{inctxs := InCtxs2}};
 handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
 
--spec handle_cast({append, event()}, ctx()) -> {noreply, ctx()}.
-handle_cast({append, Event}, #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
-  {ok, InCtxs2} = stepflow_source:append(ChPids, Event, InCtxs),
+-spec handle_cast({append, list(event())}, ctx()) -> {noreply, ctx()}.
+handle_cast({append, Events}, #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
+  {ok, InCtxs2} = stepflow_source:append(ChPids, Events, InCtxs),
   {noreply, Ctx#{inctxs := InCtxs2}};
 handle_cast(_, Ctx) ->
   {noreply, Ctx}.

@@ -21,13 +21,13 @@
 handle_init(#{eval := Fun}) ->
   {ok, #{eval => Fun}};
 handle_init(_) ->
-  Eval = fun(Event) -> Event end,
+  Eval = fun(Events) -> Events end,
   {ok, #{eval => Eval}}.
 
--spec handle_intercept(event(), ctx()) ->
-    {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
-handle_intercept(Event, #{eval := Eval}=Ctx) ->
-  case Eval(Event) of
+-spec handle_intercept(list(event()), ctx()) ->
+    {ok, list(event()), ctx()} | {reject, ctx()} | {error, term()}.
+handle_intercept(Events, #{eval := Eval}=Ctx) ->
+  case Eval(Events) of
     {ok, Transformed} ->
       io:format("Transform: ~p~n", [Transformed]),
       {ok, Transformed, Ctx};

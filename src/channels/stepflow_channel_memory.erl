@@ -63,9 +63,9 @@ handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
 handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
 
--spec handle_cast({append, event()} | pop, ctx()) -> {noreply, ctx()}.
-handle_cast({append, Event}, #{memory := Memory}=Ctx) ->
-  Ctx2 = Ctx#{memory =>[Event | Memory]},
+-spec handle_cast({append, list(event())} | pop, ctx()) -> {noreply, ctx()}.
+handle_cast({append, Events}, #{memory := Memory}=Ctx) ->
+  Ctx2 = Ctx#{memory =>[Events | Memory]},
   stepflow_channel:pop(self()),
   {noreply, Ctx2};
 handle_cast(pop, Ctx) ->

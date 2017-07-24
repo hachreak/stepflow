@@ -59,13 +59,13 @@ handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
 handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
 
--spec handle_cast({append, event()}, ctx()) -> {noreply, ctx()}.
+-spec handle_cast({append, list(event())}, ctx()) -> {noreply, ctx()}.
 % @doc append a new message inside the queue @end
-handle_cast({append, Event}, #{exchange:=Exchange, routing_key:=RoutingKey,
+handle_cast({append, Events}, #{exchange:=Exchange, routing_key:=RoutingKey,
                                channel:=Channel, encoder := Encoder}=Ctx) ->
   amqp_channel:cast(Channel, #'basic.publish'{
       exchange=Exchange, routing_key=RoutingKey
-    }, #amqp_msg{payload=Encoder:encode(Event)}),
+    }, #amqp_msg{payload=Encoder:encode(Events)}),
   {noreply, Ctx};
 handle_cast(_, Ctx) ->
   {noreply, Ctx}.
@@ -107,8 +107,8 @@ code_change(_OldVsn, Ctx, _Extra) ->
 %   % case amqp_channel:call(Channel, #'basic.get'{
 %   %     queue = Queue, no_ack = false}) of
 %   %   #'basic.get_empty'{} -> {error, empty};
-%   %   {#'basic.get_ok'{delivery_tag = Tag}, Event} ->
-%   %     case process(Channel, Tag, Event, SinkCtx) of
+%   %   {#'basic.get_ok'{delivery_tag = Tag}, Events} ->
+%   %     case process(Channel, Tag, Events, SinkCtx) of
 %   %       {ok, SinkCtx2} -> {ok, SinkCtx2, Ctx};
 %   %       {error, sink_fails}=Error -> Error
 %   %     end
@@ -126,13 +126,13 @@ config(Config) ->
           host => Host, port => Port, queue => RoutingKey}}.
 
 -spec ack(ctx()) -> {ok, ctx()}.
-% @doc ack received, I can remove the event from memory. @end
+% @doc ack received, I can remove the events from memory. @end
 ack(#{channel := Channel, tag := Tag}=Ctx) ->
   ok = amqp_channel:cast(Channel, #'basic.ack'{delivery_tag = Tag}),
   {ok, maps:remove(tag, Ctx)}.
 
 -spec nack(ctx()) -> {ok, ctx()}.
-% @doc nack received, leave the event inside the memory. @end
+% @doc nack received, leave the events inside the memory. @end
 nack(Ctx)-> {ok, Ctx}.
 
 %% Private functions

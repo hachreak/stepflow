@@ -24,14 +24,14 @@ handle_init(_) ->
   Eval = fun(_) -> false end,
   {ok, #{eval => Eval}}.
 
--spec handle_intercept(event(), ctx()) ->
-    {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
-handle_intercept(Event, #{eval := Eval}=Ctx) ->
-  maybe_filter(Eval(Event), Event, Ctx).
+-spec handle_intercept(list(event()), ctx()) ->
+    {ok, list(event()), ctx()} | {reject, ctx()} | {error, term()}.
+handle_intercept(Events, #{eval := Eval}=Ctx) ->
+  maybe_filter(Eval(Events), Events, Ctx).
 
 %% Private functions
 
-maybe_filter(true, Event, Ctx) ->
-  io:format("Event filtered: ~p~n", [Event]),
+maybe_filter(true, Events, Ctx) ->
+  io:format("Events filtered: ~p~n", [Events]),
   {reject, Ctx};
-maybe_filter(false, Event, Ctx) -> {ok, Event, Ctx}.
+maybe_filter(false, Events, Ctx) -> {ok, Events, Ctx}.

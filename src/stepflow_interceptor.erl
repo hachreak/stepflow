@@ -22,8 +22,8 @@
 
 -callback handle_init(ctx()) -> {ok, ctx()} | {error, term()}.
 
--callback handle_intercept(event(), ctx()) ->
-    {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
+-callback handle_intercept(list(event()), ctx()) ->
+    {ok, list(event()), ctx()} | {reject, ctx()} | {error, term()}.
 
 %%====================================================================
 %% API
@@ -34,10 +34,10 @@ init(Module, Ctx) ->
   {ok, Ctx2} = Module:handle_init(Ctx),
   {ok, #{module => Module, ctx => Ctx2}}.
 
--spec intercept(event(), itctx()) ->
-    {ok, event(), ctx()} | {reject, ctx()} | {error, term()}.
-intercept(Event, #{module := Module, ctx := Ctx}=ItCtx) ->
-  newctx(Module:handle_intercept(Event, Ctx), ItCtx).
+-spec intercept(list(event()), itctx()) ->
+    {ok, list(event()), ctx()} | {reject, ctx()} | {error, term()}.
+intercept(Events, #{module := Module, ctx := Ctx}=ItCtx) ->
+  newctx(Module:handle_intercept(Events, Ctx), ItCtx).
 
 -spec init_all(list({atom(), ctx()})) -> list(ctx()).
 init_all(InterceptorsConfig) ->
@@ -46,24 +46,24 @@ init_all(InterceptorsConfig) ->
       InterceptorCtx
     end, InterceptorsConfig).
 
--spec transform(event(), list(ctx())) ->
-    {ok, event(), list(ctx())} | {reject, list(ctx())}.
-transform(Event, []) -> {ok, Event, []};
-transform(Event, [ItCtx | Rest]) ->
-  transform(intercept(Event, ItCtx), Rest, []).
+-spec transform(list(event()), list(ctx())) ->
+    {ok, list(event()), list(ctx())} | {reject, list(ctx())}.
+transform(Events, []) -> {ok, Events, []};
+transform(Events, [ItCtx | Rest]) ->
+  transform(intercept(Events, ItCtx), Rest, []).
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
-transform({ok, Event, ItCtxOut}, [], ItCtxOuts) ->
-  {ok, Event, [ItCtxOut | ItCtxOuts]};
-transform({ok, Event, ItCtxOut}, [ItCtxIn | Rest], ItCtxOuts) ->
-  transform(intercept(Event, ItCtxIn), Rest, [ItCtxOut | ItCtxOuts]);
+transform({ok, Events, ItCtxOut}, [], ItCtxOuts) ->
+  {ok, Events, [ItCtxOut | ItCtxOuts]};
+transform({ok, Events, ItCtxOut}, [ItCtxIn | Rest], ItCtxOuts) ->
+  transform(intercept(Events, ItCtxIn), Rest, [ItCtxOut | ItCtxOuts]);
 transform({reject, ItCtxOut}, ItCtxs, ItCtxOuts) ->
   {reject, lists:flatten([[ItCtxOut], ItCtxs, ItCtxOuts])}.
 
-newctx({ok, Event, Ctx}, ItCtx) -> {ok, Event, ItCtx#{ctx := Ctx}};
-% newctx({stop, Event, Ctx}, ItCtx) -> {stop, Event, ItCtx#{ctx := Ctx}};
+newctx({ok, Events, Ctx}, ItCtx) -> {ok, Events, ItCtx#{ctx := Ctx}};
+% newctx({stop, Events, Ctx}, ItCtx) -> {stop, Events, ItCtx#{ctx := Ctx}};
 newctx({reject, Ctx}, ItCtx) -> {reject, ItCtx#{ctx := Ctx}};
 newctx({error, _}=Error, _) -> Error.

@@ -43,7 +43,7 @@ Two agents connected:
     12> {PidSub2, PidS2, PidCs2} = stepflow_agent_sup:new(Input2, Output2).
 
     # Send a message from Agent 1 to Agent 2
-    14> stepflow_source_message:append(PidS2, stepflow_event:new(#{}, <<"hello">>)).
+    14> stepflow_source_message:append(PidS2, [stepflow_event:new(#{}, <<"hello">>)]).
 
 Run demo 2
 ----------
@@ -62,9 +62,9 @@ One source and two sinks (passing from memory and rabbitmq):
     8> Output = [ChCtx1, ChCtx2].
     9> {PidSub, PidS, PidC} = stepflow_agent_sup:new(Input, Output).
 
-    > stepflow_source_message:append(PidS, <<"hello">>).
+    > stepflow_source_message:append(PidS, [<<"hello">>]).
     > % filtered message!
-    > stepflow_source_message:append(PidS, <<"filtered">>).
+    > stepflow_source_message:append(PidS, [<<"filtered">>]).
 
 Run demo 3
 ----------
@@ -80,10 +80,10 @@ Count the events `<<"hello">>`:
     7>{PidSub, PidS, PidC} = stepflow_agent_sup:new(Input, Output).
 
     # One event that is counted
-    stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
+    stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"hello">>)]).
 
     # One event that is NOT counted
-    stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"skip">>)).
+    stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"skip">>)]).
 
 Run demo 4
 ----------
@@ -98,9 +98,9 @@ Handle bulk of 7 events with a window of 10 seconds:
     6> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
 
     # send multiple message quickly!
-    7> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
-    8> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
-    9> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
+    7> stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"hello">>)]).
+    8> stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"hello">>)]).
+    9> stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"hello">>)]).
 
 Run demo 5
 ----------

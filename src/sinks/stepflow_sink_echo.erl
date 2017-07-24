@@ -20,7 +20,7 @@
 -spec handle_init(ctx()) -> {ok, ctx()} | {error, term()}.
 handle_init(_) -> {ok, #{}}.
 
--spec handle_process(event(), ctx()) -> {ok, ctx()} | {error, term()}.
-handle_process(Event, Ctx) ->
-  io:format("Event received: ~p~n", [Event]),
+-spec handle_process(list(event()), ctx()) -> {ok, ctx()} | {error, term()}.
+handle_process(Events, Ctx) ->
+  io:format("Events received: ~p~n", [Events]),
   {ok, Ctx}.
