@@ -118,16 +118,49 @@ Filter <<"hello">> events:
     8> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
     9> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"this is passing">>)).
 
+Run demo 6
+----------
+
+```
+          +------------------------------------------------------------------+
+          |                              Agent 1                             |
+User      |                                                                  |
+ |        |     Source <---------------> Channel <--------> Sink             |
+ +------->| (erlang message)             (memory)       (index inside ES)    |
+   SEND   |                                                                  |
+   Event  +------------------------------------------------------------------+
+ <<"hello">>
+```
+
+    $ rebar3 shell --apps stepflow_sink_elasticsearch
+
+    1> SrcCtx = {[{stepflow_interceptor_counter, #{}}], #{}}.
+    2> Input = {stepflow_source_message, SrcCtx}.
+    3> {ok, SkCtx} = stepflow_sink:config(stepflow_sink_elasticsearch, #{host => <<"localhost">>, port => 9200, index => <<"myindex">>}, []).
+    4> ChCtx = {stepflow_channel_memory, #{}, SkCtx}.
+    5> Output = [ChCtx].
+    6> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
+    7> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
+
+ElasticSearch
+-------------
+
+
 Note
 ----
 
-You can run rabbitmq with docker:
+You can run `RabbitMQ` with docker:
 
     $ docker run --rm --hostname my-rabbit --name some-rabbit -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 
 And open the web interface:
 
     $ firefox http://0.0.0.0:15672/#/
+
+You can run `ElasticSearch` with docker:
+
+    $ docker pull docker.elastic.co/elasticsearch/elasticsearch:5.5.0
+    $ docker run -p 9200:9200 -e "http.host=0.0.0.0" -e "transport.host=127.0.0.1" -e "xpack.security.enabled=false" docker.elastic.co/elasticsearch/elasticsearch:5.5.0
 
 Status
 ------
