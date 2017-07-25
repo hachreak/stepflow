@@ -47,26 +47,24 @@ Two agents connected:
 
     $ rebar3 auto --sname pippo --apps stepflow --config priv/example.config
 
-    # Run Agent 2
+    # Run Agent 1 and Agent 2
 
-    1> SrcCtx = {[{stepflow_interceptor_counter, #{}}], #{}}.
-    2> Input = {stepflow_source_message, SrcCtx}.
-    3> {ok, SkCtx1} = stepflow_sink:config(stepflow_sink_echo, nope, [{stepflow_interceptor_counter, #{}}]).
-    4> ChCtx1 = {stepflow_channel_memory, #{}, SkCtx1}.
-    5> Output = [ChCtx1].
-    6> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
+    1> [{_, {_, PidS1, _}}, {_, {_, PidS2, _}}] = stepflow_config:run("
+          interceptor Counter = stepflow_interceptor_counter#{}.
+          source FromMsg = stepflow_source_message[Counter]#{}.
+          channel Memory = stepflow_channel_memory#{}.
+          sink Echo = stepflow_sink_echo[Counter]#{}.
 
-    # Run Agent 1
+          flow Agent2: FromMsg |> Memory |> Echo.
 
-    7> SrcCtx2 = {[{stepflow_interceptor_counter, #{}}], #{}}.
-    8> Input2 = {stepflow_source_message, SrcCtx2}.
-    9> {ok, SkCtx3} = stepflow_sink:config(stepflow_sink_message, #{source => PidS}, [{stepflow_interceptor_counter, #{}}]).
-    10> ChCtx2 = {stepflow_channel_memory, #{}, SkCtx3}.
-    11> Output2 = [ChCtx2].
-    12> {PidSub2, PidS2, PidCs2} = stepflow_agent_sup:new(Input2, Output2).
+          sink Connector = stepflow_sink_message[Counter]#{source => Agent2}.
+
+          flow Agent1: FromMsg |> Memory |> Connector.
+    ").
 
     # Send a message from Agent 1 to Agent 2
-    14> stepflow_source_message:append(PidS2, [stepflow_event:new(#{}, <<"hello">>)]).
+    2> stepflow_source_message:append(
+        PidS1, [stepflow_event:new(#{}, <<"hello">>)]).
 
 Run demo 2
 ----------
@@ -85,15 +83,24 @@ One source and two sinks (passing from memory and rabbitmq):
 
     $ rebar3 auto --sname pippo --apps stepflow --config priv/example.config
 
-    1> Filter = fun(Events) -> lists:any(fun(E) -> E == <<"filtered">> end, Events) end.
-    2> SrcCtx = {[{stepflow_interceptor_filter, #{filter => Filter}}], #{}}.
-    3> Input = {stepflow_source_message, SrcCtx}.
-    4> {ok, SkCtx1} = stepflow_sink:config(stepflow_sink_echo, nope, [{stepflow_interceptor_echo, {}}]).
-    5> {ok, SkCtx2} = stepflow_sink:config(stepflow_sink_echo, nope, []).
-    6> ChCtx1 = {stepflow_channel_memory, #{}, SkCtx1}.
-    7> ChCtx2 = {stepflow_channel_rabbitmq, #{}, SkCtx2}.
-    8> Output = [ChCtx1, ChCtx2].
-    9> {PidSub, PidS, PidC} = stepflow_agent_sup:new(Input, Output).
+    1> [{_, {_, PidS, _}}] = stepflow_config:run("
+        <<<
+          FilterFun = fun(Events) ->
+            lists:any(fun(E) -> E == <<\"filtered\">> end, Events)
+          end.
+        >>>
+
+        interceptor Filter = stepflow_interceptor_filter#{filter => FilterFun}.
+        interceptor Echo = stepflow_interceptor_echo#{}.
+        source FromMsg = stepflow_source_message[]#{}.
+        channel Memory = stepflow_channel_memory#{}.
+        channel Rabbitmq = stepflow_channel_rabbitmq#{}.
+        sink EchoMemory = stepflow_sink_echo[Echo]#{}.
+        sink EchoRabbitmq = stepflow_sink_echo[Filter]#{}.
+
+        flow Agent: FromMsg |> Memory   |> EchoMemory;
+                            |> Rabbitmq |> EchoRabbitmq.
+        ").
 
     > stepflow_source_message:append(PidS, [<<"hello">>]).
     > % filtered message!
@@ -102,35 +109,51 @@ One source and two sinks (passing from memory and rabbitmq):
 Run demo 3
 ----------
 
-Skip count the events `<<"skip">>`:
+Count events but skip body `<<"found">>`:
 
-    1> Filter = fun(Events) -> lists:any(fun(#{body := Body}) -> Body == <<"skip">> end, Events) end.
-    2> SrcCtx = {[{stepflow_interceptor_counter, #{header => mycounter, eval => Filter}}, {stepflow_interceptor_echo, #{}}], #{}}.
-    3> Input = {stepflow_source_message, SrcCtx}.
-    4> {ok, SkCtx} = stepflow_sink:config(stepflow_sink_echo, nope, [{stepflow_interceptor_echo, {}}]).
-    5> ChCtx = {stepflow_channel_rabbitmq, #{}, SkCtx}.
-    6> Output = [ChCtx].
-    7>{PidSub, PidS, PidC} = stepflow_agent_sup:new(Input, Output).
+    1> [{_, {_, PidS, _}}] = stepflow_config:run("
+        <<<
+        FilterFun = fun(Events) ->
+            lists:any(fun(Event) ->
+                stepflow_event:body(Event) == <<\"found\">>
+              end, Events)
+          end.
+        >>>
+
+        interceptor Counter = stepflow_interceptor_counter#{
+          header => mycounter, eval => FilterFun
+        }.
+        interceptor Show = stepflow_interceptor_echo#{}.
+        source FromMsg = stepflow_source_message[]#{}.
+        channel Rabbitmq = stepflow_channel_rabbitmq#{}.
+        sink Echo = stepflow_sink_echo[Counter, Show]#{}.
+
+        flow Agent: FromMsg |> Rabbitmq |> Echo.
+        ").
 
     # One event that is counted
     stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"hello">>)]).
 
     # One event that is NOT counted
-    stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"skip">>)]).
+    stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"found">>)]).
 
 Run demo 4
 ----------
 
 Handle bulk of 7 events with a window of 10 seconds:
 
-    1> SrcCtx = {[{stepflow_interceptor_counter, #{}}], #{}}.
-    2> Input = {stepflow_source_message, SrcCtx}.
-    3> {ok, SkCtx} = stepflow_sink:config(stepflow_sink_echo, #{}, []).
-    4> ChCtx = {stepflow_channel_mnesia, #{flush_period => 10, capacity => 7, table => mytable}, SkCtx}.
-    5> Output = [ChCtx].
-    6> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
+    1> [{_, {_, PidS, _}}] = stepflow_config:run("
+        interceptor Counter = stepflow_interceptor_counter#{}.
+        source FromMsg = stepflow_source_message[Counter]#{}.
+        channel Buffer = stepflow_channel_mnesia#{
+            flush_period => 10, capacity => 7, table => mytable
+        }.
+        sink Echo = stepflow_sink_echo[]#{}.
+        flow Squeeze: FromMsg |> Buffer |> Echo.
+    ").
 
-    # send multiple message quickly!
+    # send multiple message quickly to fill the buffer!
+    # you will see that they arrive all together.<F11>
     7> stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"hello">>)]).
     8> stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"hello">>)]).
     9> stepflow_source_message:append(PidS, [stepflow_event:new(#{}, <<"hello">>)]).
@@ -140,18 +163,28 @@ Run demo 5
 
 Aggregate events in a single one:
 
-    1> Fun = fun(Events) ->
-         BodyNew = lists:foldr(fun(#{body := Body}, Acc) ->
-             << Body/binary, Acc/binary >>
-           end, <<"">>, Events),
-         {ok, [stepflow_event:new(#{}, BodyNew)]}
-       end.
-    2> SrcCtx = {[{stepflow_interceptor_transform, #{eval => Fun}}], #{}}.
-    3> Input = {stepflow_source_message, SrcCtx}.
-    4> {ok, SkCtx} = stepflow_sink:config(stepflow_sink_echo, #{}, []).
-    5> ChCtx = {stepflow_channel_mnesia, #{flush_period => 10, capacity => 2, table => pippo}, SkCtx}.
-    6> Output = [ChCtx].
-    7> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
+    1> [{_, {_, PidS, _}}] = stepflow_config:run("
+        <<<
+        SqueezeFun = fun(Events) ->
+                 BodyNew = lists:foldr(fun(Event, Acc) ->
+                     Body = stepflow_event:body(Event),
+                     << Body/binary, <<\" \">>/binary, Acc/binary >>
+                   end, <<\"\">>, Events),
+                 {ok, [stepflow_event:new(#{}, BodyNew)]}
+               end.
+        >>>
+
+        interceptor Squeezer = stepflow_interceptor_transform#{
+          eval => SqueezeFun
+        }.
+        source FromMsg = stepflow_source_message[Squeezer]#{}.
+        channel Mnesia = stepflow_channel_mnesia#{
+          flush_period => 10, capacity => 2, table => pippo
+        }.
+        sink Echo = stepflow_sink_echo[]#{}.
+
+        flow Aggretator: FromMsg |> Mnesia |> Echo.
+        ").
 
     8> stepflow_source_message:append(PidS, [
          stepflow_event:new(#{}, <<"hello">>),
@@ -160,6 +193,8 @@ Aggregate events in a single one:
 
 Run demo 6
 ----------
+
+Index events in ElasticSearch.
 
 ```
           +------------------------------------------------------------------+
@@ -174,16 +209,19 @@ User      |                                                                  |
 
     $ rebar3 shell --apps stepflow_sink_elasticsearch
 
-    1> SrcCtx = {[{stepflow_interceptor_counter, #{}}], #{}}.
-    2> Input = {stepflow_source_message, SrcCtx}.
-    3> {ok, SkCtx} = stepflow_sink:config(stepflow_sink_elasticsearch, #{host => <<"localhost">>, port => 9200, index => <<"myindex">>}, []).
-    4> ChCtx = {stepflow_channel_memory, #{}, SkCtx}.
-    5> Output = [ChCtx].
-    6> {PidSub, PidS, PidCs} = stepflow_agent_sup:new(Input, Output).
-    7> stepflow_source_message:append(PidS, stepflow_event:new(#{}, <<"hello">>)).
+    1> [{_, {_, PidS, _}}] = stepflow_config:run("
+          interceptor Counter = stepflow_interceptor_counter#{}.
+          source FromMsg = stepflow_source_message[Counter]#{}.
+          channel Memory = stepflow_channel_memory#{}.
+          sink Elasticsearch = stepflow_sink_elasticsearch[]#{
+            host => <<\"localhost\">>, port => 9200, index => <<\"myindex\">>
+          }.
 
-ElasticSearch
--------------
+          flow Agent: FromMsg |> Memory |> Elasticsearch.
+       ").
+
+    2> stepflow_source_message:append(
+          PidS, [stepflow_event:new(#{}, <<"hello">>)]).
 
 
 Note

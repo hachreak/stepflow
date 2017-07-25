@@ -14,5 +14,7 @@ erl_crash.dump
 logs
 _build
 .idea
+src/config/stepflow_config_lexer.erl
+src/config/stepflow_config_parser.erl
 rebar3.crashdump
 rebar.lock

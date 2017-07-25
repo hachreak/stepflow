@@ -60,6 +60,5 @@ route(Module, Events, #{skctx := SinkCtx}=Ctx) ->
     {error, _} ->
       % something goes wrong! Leave memory as it is.
       Module:nack(Ctx),
-      % ok = amqp_channel:cast(Channel, #'basic.nack'{delivery_tag = Tag}),
       {error, sink_fails}
   end.

@@ -17,15 +17,15 @@
 
 -type headers() :: map().
 -type body()    :: any().
--type event()   :: #{headers => headers(), body => body()}.
+-type event()   :: #{binary() => headers(), binary() => body()}.
 
 
 -spec new(headers(), body()) -> event().
-new(Headers, Body) -> #{headers => Headers, body => Body}.
+new(Headers, Body) -> #{<<"headers">> => Headers, <<"body">> => Body}.
 
 -spec body(event()) -> body().
-body(#{body := Body}) -> Body.
+body(#{<<"body">> := Body}) -> Body.
 
 -spec header(binary() | string() | atom(), any(), event()) -> event().
-header(Name, Value, #{headers := Headers}=Event) ->
-  Event#{headers => Headers#{Name => Value}}.
+header(Name, Value, #{<<"headers">> := Headers}=Event) ->
+  Event#{<<"headers">> => Headers#{Name => Value}}.

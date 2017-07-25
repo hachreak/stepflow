@@ -40,7 +40,7 @@ process(Events, #{inctxs := InCtxs, module := Module, ctx := Ctx}=SkCtx) ->
   case stepflow_interceptor:transform(Events, InCtxs) of
     {ok, Events2, InCtxs2} ->
       newctx(Module:handle_process(Events2, Ctx), SkCtx#{inctxs => InCtxs2});
-    {reject, InCtxs2} -> {reject, SkCtx#{inctxs => InCtxs2}}
+    {reject, InCtxs2} -> {ok, SkCtx#{inctxs => InCtxs2}}
     % TODO {stop, Events, InCtxs}
     % TODO {error, _}
   end.
