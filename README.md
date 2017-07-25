@@ -3,6 +3,29 @@ stepflow
 
 An OTP application that implements Flume patterns.
 
+It can be useful if you need to collect, aggregate, transform, move large
+amount of data from/to different sources/destinations.
+
+Implements ingest and real-time processing pipelines.
+
+You can define `agents` that will forms a pipeline for events.
+A event will represent a unit of information.
+Every `agent` if made by one source and one or more sinks.
+
+A source-sink is connected by a `channel`.
+After a `source` and before every `sink` you can inject interceptors as many as
+you want.
+Every `interceptor` can enrich, transforms, aggregates, reject, ...
+
+There are different channels: on RAM, on mnesia table, on RabbitMQ.
+
+Every channels is made to take advantages of the technology used and
+maximize the reliability of the system also if something goes wrong, depending
+how much the memory is permanent.
+
+All the events are staged inside the channel until they are successfully stored
+inside the next agent or in a terminal repository (e.g. database, file, ...).
+
 Build
 -----
 
@@ -49,6 +72,16 @@ Run demo 2
 ----------
 
 One source and two sinks (passing from memory and rabbitmq):
+
+```
+  +-------------------------------------------+
+  |         Agent 1                           |
+  |                                           |
+  |Source <--> Channel1 (memory)   <--> Sink1 |
+  |        |                                  |
+  |        +-> Channel2 (rabbitmq) <--> Sink2 |
+  +-------------------------------------------+
+```
 
     $ rebar3 auto --sname pippo --apps stepflow --config priv/example.config
 
