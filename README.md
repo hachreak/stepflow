@@ -1,6 +1,8 @@
 stepflow
 ========
 
+[![Build Status](https://travis-ci.org/hachreak/stepflow.svg?branch=master)](https://travis-ci.org/hachreak/stepflow)
+
 An OTP application that implements Flume patterns.
 
 It can be useful if you need to collect, aggregate, transform, move large

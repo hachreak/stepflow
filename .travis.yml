@@ -1,0 +1,11 @@
+language: erlang
+
+otp_release:
+  - 18.3
+  - 19.2
+  - 20.0
+
+install:
+  - sh ./.travis.rebar3.sh
+
+script: "./run-tests.sh"
