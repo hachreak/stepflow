@@ -30,12 +30,9 @@ run(String) -> eval(load(String)).
 
 %% Private functions
 
-compile(erlang, TokensParsed, {Result, Bindings}) ->
-  NewBindings = new_bind(TokensParsed, Bindings),
-  {Result, NewBindings};
 compile(Type, TokensParsed, {Result, Bindings})
     when Type =:= interceptor orelse Type =:= source orelse Type =:= channel
-         orelse Type =:= sink->
+         orelse Type =:= sink orelse Type =:= erlang->
   NewBindings = new_bind(TokensParsed, Bindings),
   {Result, NewBindings};
 compile(flow, {Name, {Source, ChannelSinks}}, {Result, Bindings}) ->

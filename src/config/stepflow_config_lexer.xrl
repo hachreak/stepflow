@@ -4,7 +4,6 @@ LETTER = [a-zA-Z_0-9]
 WORD = LETTER+
 WHITESPACE = [\s\t\n\r]
 ANY = [\"\s\n\t\r\ca-zA-Z_0-9\-\=\>\,\<]
-%ERLANG = [\/\[\]\#()\"\s\n\t\r\ca-zA-Z_0-9\-\=\>\,\<\.\{\}\:\!\~]
 ERLANG = [^`]
 
 Rules.

@@ -36,13 +36,11 @@ var_mdef -> field eq_op field sbo_op sbc_op map_op eol_op :
 var_mdef -> field eq_op field sbo_op interceptors sbc_op map_op eol_op :
     bind('$1', '$3', '$5', '$7').
 
-interceptors -> field              : [to_var('$1')].
+interceptors -> field : [to_var('$1')].
 interceptors -> field comma_op interceptors :
     to_list(to_var('$1'), to_list(reserved(','), '$3')).
 
 Erlang code.
-
-as_is(V) -> V.
 
 to_list(A, Rest) when is_list(Rest) -> [A | Rest];
 to_list(A, B) -> [A, B].
