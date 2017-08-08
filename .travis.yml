@@ -1,5 +1,9 @@
 language: erlang
 
+services:
+  - elasticsearch
+  - rabbitmq
+
 otp_release:
   - 18.3
   - 19.2

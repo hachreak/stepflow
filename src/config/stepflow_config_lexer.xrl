@@ -10,9 +10,7 @@ Rules.
 
 {WHITESPACE}+ : skip_token.
 channel : {token, {channel_op, TokenLine, list_to_atom(TokenChars)}}.
-% define : {token, {define_op, TokenLine, list_to_atom(TokenChars)}}.
 flow : {token, {flow_op, TokenLine, list_to_atom(TokenChars)}}.
-% from : {token, {from_op, TokenLine, list_to_atom(TokenChars)}}.
 interceptor : {token, {interceptor_op, TokenLine, list_to_atom(TokenChars)}}.
 sink : {token, {sink_op, TokenLine, list_to_atom(TokenChars)}}.
 source : {token, {source_op, TokenLine, list_to_atom(TokenChars)}}.
@@ -21,9 +19,6 @@ source : {token, {source_op, TokenLine, list_to_atom(TokenChars)}}.
 \[ : {token, {sbo_op, TokenLine, list_to_atom(TokenChars)}}.
 \] : {token, {sbc_op, TokenLine, list_to_atom(TokenChars)}}.
 \#\{{ANY}*\} : {token, {map_op, TokenLine, TokenChars}}.
-% \#\{ : {token, {cbo_op, TokenLine, list_to_atom(TokenChars)}}.
-% \} : {token, {cbc_op, TokenLine, list_to_atom(TokenChars)}}.
-% \=\> : {token, {map_to_op, TokenLine, list_to_atom(TokenChars)}}.
 \|\> : {token, {to_op, TokenLine, list_to_atom(TokenChars)}}.
 \, : {token, {comma_op, TokenLine, list_to_atom(TokenChars)}}.
 \;\n : {token, {eos_op, TokenLine, list_to_atom(TokenChars)}}.
@@ -38,4 +33,3 @@ remove_header(Str) ->
   Sub = lists:nthtail(length("<<<\n"), Str),
   {Body, _} = lists:split(length(Sub) - length("\n>>>"), Sub),
   Body.
-  % Str.

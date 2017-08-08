@@ -7,7 +7,8 @@
 -include_lib("eunit/include/eunit.hrl").
 
 load_test() ->
-  stepflow_config:load("
+  application:ensure_all_started(stepflow),
+  [{'Aggretator', {_, _, [_]}}] = stepflow_config:run("
     <<<
     SqueezeFun = fun(Events) ->
              BodyNew = lists:foldr(fun(Event, Acc) ->
@@ -30,7 +31,7 @@ load_test() ->
     flow Aggretator: FromMsg |> Mnesia |> Echo.
   "),
 
-  stepflow_config:load("
+  [{'Agent', {_, _, [_, _]}}] = stepflow_config:run("
     <<<
     FilterFun = fun(Events) ->
       lists:any(fun(E) -> E == <<\"filtered\">> end, Events)
@@ -49,7 +50,7 @@ load_test() ->
                         |> Rabbitmq |> EchoRabbitmq.
   "),
 
-  stepflow_config:load("
+  [{'Agent', {_, _, [_]}}] = stepflow_config:run("
     <<<
     FilterFun = fun(Events) ->
       lists:any(fun(Event) ->
@@ -69,7 +70,7 @@ load_test() ->
     flow Agent: FromMsg |> Rabbitmq |> Echo.
   "),
 
-  stepflow_config:load("
+  [{'Squeeze', {_, _, [_]}}] = stepflow_config:run("
     interceptor Counter = stepflow_interceptor_counter#{}.
     source FromMsg = stepflow_source_message[Counter]#{}.
     channel Buffer = stepflow_channel_mnesia#{
@@ -80,7 +81,7 @@ load_test() ->
     flow Squeeze: FromMsg |> Buffer |> Echo.
   "),
 
-  stepflow_config:load("
+  [{'Aggretator', {_, _, [_]}}] = stepflow_config:run("
     <<<
     SqueezeFun = fun(Events) ->
         BodyNew = lists:foldr(fun(Event, Acc) ->
@@ -103,7 +104,9 @@ load_test() ->
     flow Aggretator: FromMsg |> Mnesia |> Echo.
   "),
 
-  stepflow_config:load("
+  [
+    {'Agent2', {_, _, [_]}}, {'Agent', {_, _, [_]}}
+  ] = stepflow_config:run("
     interceptor Counter = stepflow_interceptor_counter#{}.
     source FromMsg = stepflow_source_message[Counter]#{}.
     channel Memory = stepflow_channel_memory#{}.
@@ -112,7 +115,66 @@ load_test() ->
     }.
 
     flow Agent: FromMsg |> Memory |> Elasticsearch.
+
+    source FromMsg2 = stepflow_source_message[Counter]#{}.
+    channel Rabbitmq = stepflow_channel_rabbitmq#{}.
+    sink SinkMsg = stepflow_sink_message[]#{source => Agent}.
+
+    flow Agent2: FromMsg2 |> Rabbitmq |> SinkMsg.
   "),
+
+  [{'Agent', {_, _, [_, _]}}] = stepflow_config:run("
+    interceptor Counter = stepflow_interceptor_counter#{}.
+    source FromMsg = stepflow_source_message[Counter]#{}.
+    channel Memory = stepflow_channel_memory#{}.
+    channel Rabbitmq = stepflow_channel_rabbitmq#{}.
+    sink Elasticsearch = stepflow_sink_elasticsearch[]#{}.
+
+    flow Agent: FromMsg |> Memory;
+                        |> Rabbitmq |> Elasticsearch.
+  "),
+
+  [{'Agent', {_, none, [_]}}] = stepflow_config:run("
+    interceptor Counter = stepflow_interceptor_counter#{}.
+    channel Memory = stepflow_channel_memory#{}.
+    sink Elasticsearch = stepflow_sink_elasticsearch[Counter]#{}.
+
+    flow Agent: Memory |> Elasticsearch.
+  "),
+
+  ?assertException(
+    throw, {wrong_type, {expected, [source,channel], 'Counter'}},
+    stepflow_config:run("
+      interceptor Counter = stepflow_interceptor_counter#{}.
+      channel Memory = stepflow_channel_memory#{}.
+      sink Elasticsearch = stepflow_sink_elasticsearch[Counter]#{}.
+
+      flow Agent: Counter |> Elasticsearch.
+    ")),
+
+  ?assertException(
+    throw, {wrong_type, {expected, [channel], 'Elasticsearch'}},
+    stepflow_config:run("
+      interceptor Counter = stepflow_interceptor_counter#{}.
+      source FromMsg = stepflow_source_message[Counter]#{}.
+      channel Memory = stepflow_channel_memory#{}.
+      sink Elasticsearch = stepflow_sink_elasticsearch[Counter]#{}.
+
+      flow Agent: FromMsg |> Memory;
+                          |> Elasticsearch.
+    ")),
+
+  ?assertException(
+    throw, {wrong_type, {expected, [sink], 'Counter'}},
+    stepflow_config:run("
+      interceptor Counter = stepflow_interceptor_counter#{}.
+      source FromMsg = stepflow_source_message[Counter]#{}.
+      channel Memory = stepflow_channel_memory#{}.
+      sink Elasticsearch = stepflow_sink_elasticsearch[Counter]#{}.
+
+      flow Agent: FromMsg |> Memory;
+                          |> Memory |> Counter.
+    ")),
 
   ok.
 
