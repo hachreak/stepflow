@@ -60,18 +60,19 @@ start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
 -spec init(list(ctx())) -> {ok, ctx()}.
-init([#{flush_period := FlushPeriod, table := Table}=Config]) ->
+init([#{table := Table}=Config]) ->
   create_schema(),
   create_table(Table),
-  erlang:start_timer(FlushPeriod, self(), flush),
   {ok, Config}.
 
 -spec handle_call(setup | {connect_sink, skctx()}, {pid(), term()}, ctx()) ->
     {reply, ok, ctx()}.
 handle_call(setup, _From, Ctx) ->
   {reply, ok, Ctx};
-handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
+handle_call({connect_sink, SinkCtx}, _From,
+            #{flush_period := FlushPeriod}=Ctx) ->
   Ctx2 = Ctx#{skctx => SinkCtx},
+  erlang:start_timer(FlushPeriod, self(), flush),
   {reply, ok, Ctx2};
 handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
@@ -80,7 +81,6 @@ handle_call(Input, _From, Ctx) ->
 handle_cast({append, Events}, #{table := Table}=Ctx) ->
   write(Table, Events),
   maybe_pop(Ctx),
-  % stepflow_channel:pop(self()),
   {noreply, Ctx};
 handle_cast(pop, Ctx) ->
   {ok, Ctx2} = flush(Ctx),
@@ -134,7 +134,6 @@ write(Table, Events) ->
 
 -spec flush(ctx()) -> {ok, ctx()} | {error, term()}.
 flush(#{capacity := Capacity, table := Table}=Ctx) ->
-  % CatchAll = [{'_',[],['$_']}],
   {ok, _} = mnesia:activity(transaction, fun() ->
       Bulk = qlc:eval(catch_all(Table), [{max_list_size, Capacity}]),
       % TODO check if bulk is empty!
