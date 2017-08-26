@@ -10,6 +10,7 @@
 -export([
   append/3,
   config/1,
+  debug/4,
   setup_channel/2
 ]).
 
@@ -41,3 +42,7 @@ append(PidChs, Events, InCtxs) ->
     % TODO {stop, Events, InCtxs}
     % TODO {error, _}
   end.
+
+-spec debug(pid(), atom(), integer(), pid()) -> ok.
+debug(PidSource, Type, Period, Pid) ->
+  gen_server:cast(PidSource, {debug, {Type, Period, Pid}}).
