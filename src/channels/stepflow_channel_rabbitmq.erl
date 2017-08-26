@@ -67,6 +67,9 @@ handle_cast({append, Events}, #{exchange:=Exchange, routing_key:=RoutingKey,
       exchange=Exchange, routing_key=RoutingKey
     }, #amqp_msg{payload=Encoder:encode(Events)}),
   {noreply, Ctx};
+handle_cast({debug, _}=Cfg, Ctx) ->
+  erlang:start_timer(10, self(), Cfg),
+  {noreply, Ctx};
 handle_cast(_, Ctx) ->
   {noreply, Ctx}.
 
@@ -88,6 +91,13 @@ handle_info({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
       Ctx2 = disconnect(Ctx),
       {noreply, Ctx2}
   end;
+handle_info({timeout, _, {debug, {info, 0, Pid}}}, Ctx) ->
+  Pid ! get_info(Ctx),
+  {noreply, Ctx};
+handle_info({timeout, _, {debug, {info, Period, Pid}}=Cfg}, Ctx) ->
+  Pid ! get_info(Ctx),
+  erlang:start_timer(Period, self(), Cfg),
+  {noreply, Ctx};
 handle_info(_Info, Ctx) ->
   {noreply, Ctx}.
 
@@ -178,3 +188,5 @@ disconnect(
   amqp_connection:disconnect(Connection),
   Ctx#{status => offline};
 disconnect(Ctx) -> Ctx.
+
+get_info(Ctx) -> Ctx.

@@ -66,12 +66,14 @@ handle_cast({append, Events}, #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
   {ok, InCtxs2} = stepflow_source:append(ChPids, Events, InCtxs),
   {noreply, Ctx#{inctxs := InCtxs2}};
 handle_cast({debug, _}=Cfg, Ctx) ->
+  io:format("start timer~n"),
   erlang:start_timer(10, self(), Cfg),
   {noreply, Ctx};
 handle_cast(_, Ctx) ->
   {noreply, Ctx}.
 
 handle_info({timeout, _, {debug, {info, 0, Pid}}}, Ctx) ->
+  io:format("timeout timer ~p~n", [Pid]),
   Pid ! get_info(Ctx),
   {noreply, Ctx};
 handle_info({timeout, _, {debug, {info, Period, Pid}}=Cfg}, Ctx) ->

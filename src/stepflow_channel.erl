@@ -11,6 +11,7 @@
   append/2,
   setup/1,
   connect_sink/2,
+  debug/4,
   pop/1,
   route/3
 ]).
@@ -62,3 +63,7 @@ route(Module, Events, #{skctx := SinkCtx}=Ctx) ->
       Module:nack(Ctx),
       {error, sink_fails}
   end.
+
+-spec debug(pid(), atom(), integer(), pid()) -> ok.
+debug(PidChannel, Type, Period, Pid) ->
+  gen_server:cast(PidChannel, {debug, {Type, Period, Pid}}).
