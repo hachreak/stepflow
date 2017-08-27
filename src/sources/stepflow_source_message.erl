@@ -65,23 +65,9 @@ handle_call(Input, _From, Ctx) ->
 handle_cast({append, Events}, #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
   {ok, InCtxs2} = stepflow_source:append(ChPids, Events, InCtxs),
   {noreply, Ctx#{inctxs := InCtxs2}};
-handle_cast({debug, _}=Cfg, Ctx) ->
-  io:format("start timer~n"),
-  erlang:start_timer(10, self(), Cfg),
-  {noreply, Ctx};
-handle_cast(_, Ctx) ->
-  {noreply, Ctx}.
+handle_cast(Msg, Ctx) -> stepflow_source:handle_cast(Msg, Ctx).
 
-handle_info({timeout, _, {debug, {info, 0, Pid}}}, Ctx) ->
-  io:format("timeout timer ~p~n", [Pid]),
-  Pid ! get_info(Ctx),
-  {noreply, Ctx};
-handle_info({timeout, _, {debug, {info, Period, Pid}}=Cfg}, Ctx) ->
-  Pid ! get_info(Ctx),
-  erlang:start_timer(Period, self(), Cfg),
-  {noreply, Ctx};
-handle_info(_Info, Ctx) ->
-  {noreply, Ctx}.
+handle_info(Msg, Ctx) -> stepflow_source:handle_info(Msg, Ctx).
 
 terminate(_Reason, _Ctx) ->
   io:format("Terminate!!~n"),
@@ -90,7 +76,3 @@ terminate(_Reason, _Ctx) ->
 code_change(_OldVsn, Ctx, _Extra) ->
   io:format("code changed !"),
   {ok, Ctx}.
-
-%% Private functions
-
-get_info(Ctx) -> Ctx.

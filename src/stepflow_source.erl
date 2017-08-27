@@ -14,6 +14,11 @@
   setup_channel/2
 ]).
 
+-export([
+  handle_cast/2,
+  handle_info/2
+]).
+
 -type ctx()   :: map().
 -type event() :: stepflow_event:event().
 -type inctx() :: stepflow_interceptor:ctx().
@@ -45,4 +50,31 @@ append(PidChs, Events, InCtxs) ->
 
 -spec debug(pid(), atom(), integer(), pid()) -> ok.
 debug(PidSource, Type, Period, Pid) ->
-  gen_server:cast(PidSource, {debug, {Type, Period, Pid}}).
+  erlang:start_timer(10, PidSource, {debug, {Type, Period, Pid}}).
+
+%% API for behaviour implementations
+
+handle_cast(Msg, Ctx) ->
+  error_logger:warning_msg("[Source] message not processed: ~p~n", [Msg]),
+  {noreply, Ctx}.
+
+handle_info({timeout, _, {debug, {channels, _, Pid}}}, Ctx) ->
+  Pid ! get_channels(Ctx),
+  {noreply, Ctx};
+handle_info({timeout, _, {debug, {info, 0, Pid}}}, Ctx) ->
+  Pid ! get_info(Ctx),
+  {noreply, Ctx};
+handle_info({timeout, _, {debug, {info, Period, Pid}}=Cfg}, Ctx) ->
+  Pid ! get_info(Ctx),
+  erlang:start_timer(Period, self(), Cfg),
+  {noreply, Ctx};
+handle_info(Msg, Ctx) ->
+  error_logger:warning_msg("[Source] message not processed: ~p~n", [Msg]),
+  {noreply, Ctx}.
+
+%% Private functions
+
+get_info(Ctx) -> Ctx.
+
+get_channels(#{channels := ChPids}) ->
+  ChPids.
