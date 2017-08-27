@@ -85,26 +85,14 @@ handle_cast({append, Events}, #{table := Table}=Ctx) ->
 handle_cast(pop, Ctx) ->
   {ok, Ctx2} = flush(Ctx),
   {noreply, Ctx2};
-handle_cast({debug, _}=Cfg, Ctx) ->
-  erlang:start_timer(10, self(), Cfg),
-  {noreply, Ctx};
-handle_cast(_, Ctx) ->
-  {noreply, Ctx}.
+handle_cast(Msg, Ctx) -> stepflow_channel:handle_cast(Msg, Ctx).
 
 handle_info({timeout, _, flush}, Ctx) ->
   io:format("Flush mnesia memory.. ~n"),
   {ok, Ctx2} = flush(Ctx),
   erlang:start_timer(5000, self(), flush),
   {noreply, Ctx2};
-handle_info({timeout, _, {debug, {info, 0, Pid}}}, Ctx) ->
-  Pid ! get_info(Ctx),
-  {noreply, Ctx};
-handle_info({timeout, _, {debug, {info, Period, Pid}}=Cfg}, Ctx) ->
-  Pid ! get_info(Ctx),
-  erlang:start_timer(Period, self(), Cfg),
-  {noreply, Ctx};
-handle_info(_Info, Ctx) ->
-  {noreply, Ctx}.
+handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
 terminate(_Reason, _Ctx) ->
   io:format("Terminate!!~n"),
@@ -162,5 +150,3 @@ maybe_pop(#{capacity := Capacity, table := Table}=Ctx) ->
 % TODO limit max size of events
 catch_all(Table) ->
   qlc:q([R || R <- mnesia:table(Table)]).
-
-get_info(Ctx) -> Ctx.

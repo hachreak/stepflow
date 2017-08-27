@@ -77,7 +77,7 @@ get_binded(Type, Name, Bindings) ->
 
 get(Name, Bindings) ->
   case value(Name, Bindings) of
-    {Type, _}=Value -> Value;
+    {_Type, _}=Value -> Value;
     _ -> throw({var_unknown, Name})
   end.
 

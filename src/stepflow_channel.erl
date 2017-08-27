@@ -16,6 +16,11 @@
   route/3
 ]).
 
+-export([
+  handle_cast/2,
+  handle_info/2
+]).
+
 -export_type([event/0]).
 
 -type ctx()   :: map().
@@ -66,4 +71,25 @@ route(Module, Events, #{skctx := SinkCtx}=Ctx) ->
 
 -spec debug(pid(), atom(), integer(), pid()) -> ok.
 debug(PidChannel, Type, Period, Pid) ->
-  gen_server:cast(PidChannel, {debug, {Type, Period, Pid}}).
+  erlang:start_timer(10, PidChannel, {debug, {Type, Period, Pid}}).
+
+%% API for behaviour implementations
+
+handle_info({timeout, _, {debug, {info, 0, Pid}}}, Ctx) ->
+  Pid ! get_info(Ctx),
+  {noreply, Ctx};
+handle_info({timeout, _, {debug, {info, Period, Pid}}=Cfg}, Ctx) ->
+  Pid ! get_info(Ctx),
+  erlang:start_timer(Period, self(), Cfg),
+  {noreply, Ctx};
+handle_info(Msg, Ctx) ->
+  error_logger:warning_msg("[Channel] message not processed: ~p~n", [Msg]),
+  {noreply, Ctx}.
+
+handle_cast(Msg, Ctx) ->
+  error_logger:warning_msg("[Channel] message not processed: ~p~n", [Msg]),
+  {noreply, Ctx}.
+
+%% Private functions
+
+get_info(Ctx) -> Ctx.

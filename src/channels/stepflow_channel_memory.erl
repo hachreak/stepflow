@@ -73,26 +73,14 @@ handle_cast(pop, Ctx) ->
     {error, _} -> {noreply, Ctx};
     {ok, Ctx2} -> {noreply, Ctx2}
   end;
-handle_cast({debug, _}=Cfg, Ctx) ->
-  erlang:start_timer(10, self(), Cfg),
-  {noreply, Ctx};
-handle_cast(_, Ctx) ->
-  {noreply, Ctx}.
+handle_cast(Msg, Ctx) -> stepflow_channel:handle_cast(Msg, Ctx).
 
 handle_info({timeout, _, flush}, Ctx) ->
   io:format("Flush memory.. ~p~n", [maps:get(memory, Ctx)]),
   Ctx2 = flush({ok, Ctx}, Ctx),
   erlang:start_timer(5000, self(), flush),
   {noreply, Ctx2};
-handle_info({timeout, _, {debug, {info, 0, Pid}}}, Ctx) ->
-  Pid ! get_info(Ctx),
-  {noreply, Ctx};
-handle_info({timeout, _, {debug, {info, Period, Pid}}=Cfg}, Ctx) ->
-  Pid ! get_info(Ctx),
-  erlang:start_timer(Period, self(), Cfg),
-  {noreply, Ctx};
-handle_info(_Info, Ctx) ->
-  {noreply, Ctx}.
+handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
 terminate(_Reason, _Ctx) ->
   io:format("Terminate!!~n"),
@@ -112,5 +100,3 @@ pop(#{memory := []}) -> {error, empty};
 pop(#{memory := Memory}=Ctx) ->
   io:format("memory: ~p~n", [Memory]),
   stepflow_channel:route(?MODULE, lists:last(Memory), Ctx).
-
-get_info(Ctx) -> Ctx.
