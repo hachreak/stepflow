@@ -52,14 +52,12 @@ init([Config]) -> {ok, Config#{channels => []}}.
 -spec handle_call({setup_channel, pid()} |
                   {append, list(event())}, {pid(), term()}, ctx()) ->
     {reply, ok, ctx()}.
-handle_call({setup_channel, ChPid}, _From, #{channels := Channels}=Ctx) ->
-  {reply, ok, Ctx#{channels => [ChPid | Channels]}};
 handle_call({append, Events}, _From,
             #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
   {ok, InCtxs2} = stepflow_source:append(ChPids, Events, InCtxs),
   {reply, ok, Ctx#{inctxs := InCtxs2}};
-handle_call(Input, _From, Ctx) ->
-  {reply, Input, Ctx}.
+handle_call(Msg, From, Ctx) ->
+  stepflow_source:handle_call(Msg, From, Ctx).
 
 -spec handle_cast({append, list(event())}, ctx()) -> {noreply, ctx()}.
 handle_cast({append, Events}, #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
