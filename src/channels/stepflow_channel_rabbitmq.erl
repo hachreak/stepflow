@@ -51,10 +51,10 @@ handle_call(setup, _From, Ctx) ->
   Ctx2 = handle_connect(Ctx),
   {reply, ok, Ctx2};
 % @doc connect to the sink @end
-handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
-  case handle_route(Ctx#{skctx => SinkCtx}) of
+handle_call({connect_sink, _SinkCtx}=Msg, From, Ctx) ->
+  case handle_route(Ctx) of
     {error, _}=Error -> {reply, Error, Ctx};
-    {ok, Ctx2} -> {reply, ok, Ctx2}
+    {ok, Ctx2} -> stepflow_channel:handle_call(Msg, From, Ctx2)
   end;
 handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.

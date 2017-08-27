@@ -17,6 +17,7 @@
 ]).
 
 -export([
+  handle_call/3,
   handle_cast/2,
   handle_info/2
 ]).
@@ -74,6 +75,13 @@ debug(PidChannel, Type, Period, Pid) ->
   erlang:start_timer(10, PidChannel, {debug, {Type, Period, Pid}}).
 
 %% API for behaviour implementations
+
+
+handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
+  {reply, ok, Ctx#{skctx => SinkCtx}};
+handle_call(Msg, _From, Ctx) ->
+  error_logger:warning_msg("[Channel] message not processed: ~p~n", [Msg]),
+  {reply, Msg, Ctx}.
 
 handle_info({timeout, _, {debug, {info, 0, Pid}}}, Ctx) ->
   Pid ! get_info(Ctx),

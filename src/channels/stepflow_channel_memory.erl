@@ -57,11 +57,8 @@ init([Config]) ->
     {reply, ok, ctx()}.
 handle_call(setup, _From, Ctx) ->
   {reply, ok, Ctx};
-handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
-  Ctx2 = Ctx#{skctx => SinkCtx},
-  {reply, ok, Ctx2};
-handle_call(Input, _From, Ctx) ->
-  {reply, Input, Ctx}.
+handle_call(Msg, From, Ctx) ->
+  stepflow_channel:handle_call(Msg, From, Ctx).
 
 -spec handle_cast({append, list(event())} | pop, ctx()) -> {noreply, ctx()}.
 handle_cast({append, Events}, #{memory := Memory}=Ctx) ->

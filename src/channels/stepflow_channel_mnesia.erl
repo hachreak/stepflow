@@ -69,13 +69,12 @@ init([#{table := Table}=Config]) ->
     {reply, ok, ctx()}.
 handle_call(setup, _From, Ctx) ->
   {reply, ok, Ctx};
-handle_call({connect_sink, SinkCtx}, _From,
+handle_call({connect_sink, _SinkCtx}=Msg, From,
             #{flush_period := FlushPeriod}=Ctx) ->
-  Ctx2 = Ctx#{skctx => SinkCtx},
   erlang:start_timer(FlushPeriod, self(), flush),
-  {reply, ok, Ctx2};
-handle_call(Input, _From, Ctx) ->
-  {reply, Input, Ctx}.
+  stepflow_channel:handle_call(Msg, From, Ctx);
+handle_call(Msg, From, Ctx) ->
+  stepflow_channel:handle_call(Msg, From, Ctx).
 
 -spec handle_cast({append, list(event())} | pop, ctx()) -> {noreply, ctx()}.
 handle_cast({append, Events}, #{table := Table}=Ctx) ->
