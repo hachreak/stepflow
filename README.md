@@ -148,7 +148,7 @@ Handle bulk of 7 events with a window of 10 seconds:
         interceptor Counter = stepflow_interceptor_counter#{}.
         source FromMsg = stepflow_source_message[Counter]#{}.
         channel Buffer = stepflow_channel_mnesia#{
-            flush_period => 10, capacity => 7, table => mytable
+            flush_period => 5000, capacity => 7, table => mytable
         }.
         sink Echo = stepflow_sink_echo[]#{}.
         flow Squeeze: FromMsg |> Buffer |> Echo.

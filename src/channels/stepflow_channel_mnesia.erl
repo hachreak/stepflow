@@ -69,28 +69,21 @@ init([#{table := Table}=Config]) ->
     {reply, ok, ctx()}.
 handle_call(setup, _From, Ctx) ->
   {reply, ok, Ctx};
-handle_call({connect_sink, _SinkCtx}=Msg, From,
-            #{flush_period := FlushPeriod}=Ctx) ->
-  erlang:start_timer(FlushPeriod, self(), flush),
-  stepflow_channel:handle_call(Msg, From, Ctx);
+handle_call({connect_sink, _SinkCtx}=Msg, From, Ctx) ->
+  {reply, ok, Ctx2} = stepflow_channel:handle_call(Msg, From, Ctx),
+  {reply, ok, flush(Ctx2)};
 handle_call(Msg, From, Ctx) ->
   stepflow_channel:handle_call(Msg, From, Ctx).
 
 -spec handle_cast({append, list(event())} | pop, ctx()) -> {noreply, ctx()}.
-handle_cast({append, Events}, #{table := Table}=Ctx) ->
-  write(Table, Events),
-  maybe_pop(Ctx),
-  {noreply, Ctx};
+handle_cast({append, Events}, Ctx) ->
+  {noreply, append(Events, Ctx)};
 handle_cast(pop, Ctx) ->
-  {ok, Ctx2} = flush(Ctx),
-  {noreply, Ctx2};
+  {noreply, transactional_pop(Ctx)};
 handle_cast(Msg, Ctx) -> stepflow_channel:handle_cast(Msg, Ctx).
 
 handle_info({timeout, _, flush}, Ctx) ->
-  io:format("Flush mnesia memory.. ~n"),
-  {ok, Ctx2} = flush(Ctx),
-  erlang:start_timer(5000, self(), flush),
-  {noreply, Ctx2};
+  {noreply, flush(Ctx)};
 handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
 terminate(_Reason, _Ctx) ->
@@ -102,6 +95,11 @@ code_change(_OldVsn, Ctx, _Extra) ->
   {ok, Ctx}.
 
 %% Private functions
+
+append(Events, #{table := Table}=Ctx) ->
+  write(Table, Events),
+  maybe_pop(Ctx),
+  Ctx.
 
 create_schema() ->
   mnesia:create_schema([node()]),
@@ -129,20 +127,32 @@ write(Table, Events) ->
         }, write)
     end).
 
--spec flush(ctx()) -> {ok, ctx()} | {error, term()}.
-flush(#{capacity := Capacity, table := Table}=Ctx) ->
-  {ok, _} = mnesia:activity(transaction, fun() ->
+flush(#{flush_period := FlushPeriod}=Ctx) ->
+  io:format("Flush mnesia memory.. ~n"),
+  erlang:start_timer(FlushPeriod, self(), flush),
+  transactional_pop(Ctx).
+
+% transaction_pop(Ctx) ->
+
+-spec transactional_pop(ctx()) -> ctx().
+transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
+  mnesia:activity(transaction, fun() ->
       Bulk = qlc:eval(catch_all(Table), [{max_list_size, Capacity}]),
       % TODO check if bulk is empty!
       % process a bulk of events
-      {ok, _} = stepflow_channel:route(
-            ?MODULE, [R#stepflow_channel_mnesia_events.events || R <- Bulk],
-            Ctx#{records => Bulk})
-    end).
+      pop([R#stepflow_channel_mnesia_events.events || R <- Bulk],
+          Ctx#{records => Bulk})
+  end).
+
+pop(Events, Ctx) ->
+  case stepflow_channel:route(?MODULE, Events, Ctx) of
+    {ok, Ctx2} -> Ctx2;
+    {error, sink_fails} -> Ctx
+  end.
 
 maybe_pop(#{capacity := Capacity, table := Table}=Ctx) ->
-  case mnesia:table_info(Table, size) > Capacity of
-    true -> flush(Ctx);
+  case mnesia:table_info(Table, size) >= Capacity of
+    true -> transactional_pop(Ctx);
     false -> ok
   end.
 
