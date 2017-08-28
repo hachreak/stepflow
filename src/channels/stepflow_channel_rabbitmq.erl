@@ -39,10 +39,7 @@ start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
 -spec init(list(ctx())) -> {ok, ctx()}.
-init([#{encoder := _}=Config]) ->
-  {ok, Config#{status => offline}};
-init([Config]) ->
-  init([Config#{encoder => stepflow_encoder_json}]).
+init([Config]) -> {ok, disconnect(Config)}.
 
 -spec handle_call(setup | {connect_sink, skctx()}, {pid(), term()}, ctx()) ->
     {reply, ok, ctx()}.
@@ -52,7 +49,7 @@ handle_call(setup, _From, Ctx) ->
   {reply, ok, Ctx2};
 % @doc connect to the sink @end
 handle_call({connect_sink, _SinkCtx}=Msg, From, Ctx) ->
-  case handle_route(Ctx) of
+  case queue_binding(Ctx) of
     {error, _}=Error -> {reply, Error, Ctx};
     {ok, Ctx2} -> stepflow_channel:handle_call(Msg, From, Ctx2)
   end;
@@ -61,12 +58,8 @@ handle_call(Input, _From, Ctx) ->
 
 -spec handle_cast({append, list(event())}, ctx()) -> {noreply, ctx()}.
 % @doc append a new message inside the queue @end
-handle_cast({append, Events}, #{exchange:=Exchange, routing_key:=RoutingKey,
-                               channel:=Channel, encoder := Encoder}=Ctx) ->
-  amqp_channel:cast(Channel, #'basic.publish'{
-      exchange=Exchange, routing_key=RoutingKey
-    }, #amqp_msg{payload=Encoder:encode(Events)}),
-  {noreply, Ctx};
+handle_cast({append, Events}, Ctx) ->
+  {noreply, append(Events, Ctx)};
 handle_cast(Msg, Ctx) -> stepflow_channel:handle_cast(Msg, Ctx).
 
 handle_info(#'basic.consume_ok'{}, Ctx) ->
@@ -77,16 +70,7 @@ handle_info(#'basic.cancel_ok'{}, Ctx) ->
   Ctx2 = disconnect(Ctx),
   {noreply, Ctx2};
 % @doc new message to deliver to the sink. @end
-handle_info({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
-            #{encoder := Encoder}=Ctx) ->
-  %% A delivery
-  case stepflow_channel:route(?MODULE, Encoder:decode(Binary),
-                              Ctx#{tag => Tag}) of
-    {ok, Ctx2} -> {noreply, Ctx2};
-    {error, sink_fails} ->
-      Ctx2 = disconnect(Ctx),
-      {noreply, Ctx2}
-  end;
+handle_info({#'basic.deliver'{}, _}=Msg, Ctx) -> {noreply, pop(Msg, Ctx)};
 handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
 terminate(_Reason, _Ctx) ->
@@ -120,8 +104,10 @@ config(Config) ->
   Exchange = maps:get(exchange, Config, <<"stepflow_channel_rabbitmq">>),
   RoutingKey = maps:get(routing_key, Config, <<"stepflow_channel_rabbitmq">>),
   Port = maps:get(port, Config, 5672),
-  {ok, Config#{exchange => Exchange, routing_key => RoutingKey, durable => true,
-          host => Host, port => Port, queue => RoutingKey}}.
+  Encoder = maps:get(encoder, Config, stepflow_encoder_json),
+  {ok, Config#{exchange => Exchange, routing_key => RoutingKey,
+               durable => true, encoder => Encoder,
+               host => Host, port => Port, queue => RoutingKey}}.
 
 -spec ack(ctx()) -> {ok, ctx()}.
 % @doc ack received, I can remove the events from memory. @end
@@ -131,9 +117,28 @@ ack(#{channel := Channel, tag := Tag}=Ctx) ->
 
 -spec nack(ctx()) -> {ok, ctx()}.
 % @doc nack received, leave the events inside the memory. @end
-nack(Ctx)-> {ok, Ctx}.
+nack(Ctx)->
+  % TODO add a strategy to reconnect!
+  disconnect(Ctx),
+  {ok, Ctx}.
 
 %% Private functions
+
+append(Events, #{exchange:=Exchange, routing_key:=RoutingKey,
+                 channel:=Channel, encoder := Encoder}=Ctx) ->
+  amqp_channel:cast(Channel, #'basic.publish'{
+      exchange=Exchange, routing_key=RoutingKey
+    }, #amqp_msg{payload=Encoder:encode(Events)}),
+  Ctx.
+
+pop({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
+        #{encoder := Encoder}=Ctx) ->
+  %% A delivery
+  case stepflow_channel:route(?MODULE, Encoder:decode(Binary),
+                              Ctx#{tag => Tag}) of
+    {ok, Ctx2} -> Ctx2;
+    {error, sink_fails} -> Ctx
+  end.
 
 -spec handle_connect(ctx()) -> ctx().
 handle_connect(#{status := online}=Ctx) -> Ctx;
@@ -153,8 +158,8 @@ handle_connect(#{host := Host, exchange := Exchange, durable := Durable,
   Config#{channel => Channel, connection => Connection, queue => Queue,
           status => online}.
 
--spec handle_route(ctx()) -> {ok, ctx()} | {error, disconnected}.
-handle_route(#{exchange := Exchange, channel := Channel, queue := Queue,
+-spec queue_binding(ctx()) -> {ok, ctx()} | {error, disconnected}.
+queue_binding(#{exchange := Exchange, channel := Channel, queue := Queue,
                routing_key := RoutingKey}=Ctx) ->
   % Create a routing rule from an exchange to a queue
   amqp_channel:call(Channel, #'queue.bind'{
@@ -163,7 +168,7 @@ handle_route(#{exchange := Exchange, channel := Channel, queue := Queue,
   #'basic.consume_ok'{consumer_tag = _Tag} = amqp_channel:subscribe(
     Channel, #'basic.consume'{queue = Queue}, self()),
   {ok, Ctx};
-handle_route(_) -> {error, disconnected}.
+queue_binding(_) -> {error, disconnected}.
 
 % Private functions
 
@@ -175,4 +180,4 @@ disconnect(
   %% Close the connection
   amqp_connection:disconnect(Connection),
   Ctx#{status => offline};
-disconnect(Ctx) -> Ctx.
+disconnect(Ctx) -> Ctx#{status => offline}.

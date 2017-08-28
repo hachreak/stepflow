@@ -80,7 +80,7 @@ debug(PidChannel, Type, Period, Pid) ->
 handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
   {reply, ok, Ctx#{skctx => SinkCtx}};
 handle_call(Msg, _From, Ctx) ->
-  error_logger:warning_msg("[Channel] message not processed: ~p~n", [Msg]),
+  warning("handle_call", Msg),
   {reply, Msg, Ctx}.
 
 handle_info({timeout, _, {debug, {info, 0, Pid}}}, Ctx) ->
@@ -91,13 +91,17 @@ handle_info({timeout, _, {debug, {info, Period, Pid}}=Cfg}, Ctx) ->
   erlang:start_timer(Period, self(), Cfg),
   {noreply, Ctx};
 handle_info(Msg, Ctx) ->
-  error_logger:warning_msg("[Channel] message not processed: ~p~n", [Msg]),
+  warning("handle_info", Msg),
   {noreply, Ctx}.
 
 handle_cast(Msg, Ctx) ->
-  error_logger:warning_msg("[Channel] message not processed: ~p~n", [Msg]),
+  warning("handle_cast", Msg),
   {noreply, Ctx}.
 
 %% Private functions
+
+warning(Fun, Msg) ->
+  error_logger:warning_msg(
+    "[Channel][~s] ~p message not processed: ~p~n", [Fun, self(), Msg]).
 
 get_info(Ctx) -> Ctx.
