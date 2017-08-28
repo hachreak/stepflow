@@ -36,7 +36,7 @@
 config(Config) -> {ok, Config}.
 
 -spec ack(ctx()) -> {ok, ctx()}.
-ack(#{memory := Memory}=Ctx) -> {ok, Ctx#{memory => lists:droplast(Memory)}}.
+ack(Ctx) -> {ok, reset(Ctx)}.
 
 -spec nack(ctx()) -> {ok, ctx()}.
 nack(Ctx)-> {ok, Ctx}.
@@ -51,7 +51,7 @@ start_link(Config) ->
 init([Config]) ->
   % TODO enable in future if we need
   % erlang:start_timer(3000, self(), flush),
-  {ok, Config#{memory => []}}.
+  {ok, reset(Config)}.
 
 -spec handle_call(setup | {connect_sink, skctx()}, {pid(), term()}, ctx()) ->
     {reply, ok, ctx()}.
@@ -61,22 +61,15 @@ handle_call(Msg, From, Ctx) ->
   stepflow_channel:handle_call(Msg, From, Ctx).
 
 -spec handle_cast({append, list(event())} | pop, ctx()) -> {noreply, ctx()}.
-handle_cast({append, Events}, #{memory := Memory}=Ctx) ->
-  Ctx2 = Ctx#{memory =>[Events | Memory]},
-  stepflow_channel:pop(self()),
-  {noreply, Ctx2};
+handle_cast({append, Events}, Ctx) ->
+  {noreply, append(Events, Ctx)};
 handle_cast(pop, Ctx) ->
-  case pop(Ctx) of
-    {error, _} -> {noreply, Ctx};
-    {ok, Ctx2} -> {noreply, Ctx2}
-  end;
+  {noreply, pop(Ctx)};
 handle_cast(Msg, Ctx) -> stepflow_channel:handle_cast(Msg, Ctx).
 
 handle_info({timeout, _, flush}, Ctx) ->
   io:format("Flush memory.. ~p~n", [maps:get(memory, Ctx)]),
-  Ctx2 = flush({ok, Ctx}, Ctx),
-  erlang:start_timer(5000, self(), flush),
-  {noreply, Ctx2};
+  {noreply, flush({ok, Ctx}, Ctx)};
 handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
 terminate(_Reason, _Ctx) ->
@@ -89,11 +82,28 @@ code_change(_OldVsn, Ctx, _Extra) ->
 
 %% Private functions
 
-flush({error, empty}, Ctx) -> Ctx#{memory => []};
+reset(Ctx) -> Ctx#{memory => []}.
+
+append(Events, #{memory := Memory}=Ctx) ->
+  % save the new value
+  Ctx2 = Ctx#{memory => lists:flatten([Events, Memory])},
+  % trigger pop!
+  stepflow_channel:pop(self()),
+  Ctx2.
+
+flush(#{memory := []}, Ctx) ->
+  erlang:start_timer(5000, self(), flush),
+  Ctx#{memory => []};
 flush({ok, Ctx2}, _Ctx) -> flush(pop(Ctx2), Ctx2).
 
 -spec pop(ctx()) -> {ok, ctx()} | {error, term()}.
-pop(#{memory := []}) -> {error, empty};
+pop(#{memory := []}=Ctx) -> Ctx;
 pop(#{memory := Memory}=Ctx) ->
-  io:format("memory: ~p~n", [Memory]),
-  stepflow_channel:route(?MODULE, lists:last(Memory), Ctx).
+  case stepflow_channel:route(?MODULE, Memory, Ctx) of
+    {error, _} ->
+      % sink fails to receive message, preserve memory!
+      Ctx;
+    {ok, Ctx2} ->
+      % sink successfully receive messages, memory already cleaned by ack()!
+      Ctx2
+  end.
