@@ -15,6 +15,7 @@
 ]).
 
 -export([
+  init/1,
   handle_call/3,
   handle_cast/2,
   handle_info/2
@@ -54,6 +55,9 @@ debug(PidSource, Type, Period, Pid) ->
   erlang:start_timer(10, PidSource, {debug, {Type, Period, Pid}}).
 
 %% API for behaviour implementations
+
+init({ok, Ctx}) -> {ok, Ctx#{channels => []}};
+init({error, _}=Error) -> Error.
 
 handle_call({setup_channel, ChPid}, _From, #{channels := Channels}=Ctx) ->
   {reply, ok, Ctx#{channels => [ChPid | Channels]}};

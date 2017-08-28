@@ -47,7 +47,8 @@ start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
 -spec init(list(ctx())) -> {ok, ctx()}.
-init([Config]) -> {ok, Config#{channels => []}}.
+init([Config]) ->
+  stepflow_source:init({ok, Config}).
 
 -spec handle_call({setup_channel, pid()} |
                   {append, list(event())}, {pid(), term()}, ctx()) ->
