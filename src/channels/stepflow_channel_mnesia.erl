@@ -45,13 +45,13 @@ config(#{}=Config) ->
                table => Table}}.
 
 -spec ack(ctx()) -> {ok, ctx()}.
-ack(#{records := Bulk, table := Table}=Ctx) ->
-  [mnesia:delete(
-     {Table, R#stepflow_channel_mnesia_events.timestamp}) || R <- Bulk],
-  {ok, maps:remove(records, Ctx)}.
+ack(#{timestamps := Timestamps, table := Table}=Ctx) ->
+  % TODO improve deleting all in one time!
+  [mnesia:delete({Table, Timestamp}) || Timestamp <- Timestamps],
+  {ok, maps:remove(timestamps, Ctx)}.
 
 -spec nack(ctx()) -> {ok, ctx()}.
-nack(Ctx)-> {ok, maps:remove(records, Ctx)}.
+nack(Ctx)-> {ok, maps:remove(timestamps, Ctx)}.
 
 %% Callbacks gen_server
 
@@ -122,6 +122,7 @@ create_table(Table) ->
 
 write(Table, Events) ->
   mnesia:activity(transaction, fun() ->
+      % FIXME the capacity is wrong if put more than one event per row!
       mnesia:write(Table, #stepflow_channel_mnesia_events{
                       timestamp=os:timestamp(), events=Events
         }, write)
@@ -139,9 +140,10 @@ transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
   mnesia:activity(transaction, fun() ->
       Bulk = qlc:eval(catch_all(Table), [{max_list_size, Capacity}]),
       % TODO check if bulk is empty!
+      Events = [R#stepflow_channel_mnesia_events.events || R <- Bulk],
+      Timestamps = [R#stepflow_channel_mnesia_events.timestamp || R <- Bulk],
       % process a bulk of events
-      pop([R#stepflow_channel_mnesia_events.events || R <- Bulk],
-          Ctx#{records => Bulk})
+      pop(Events, Ctx#{timestamps => Timestamps})
   end).
 
 pop(Events, Ctx) ->
