@@ -58,6 +58,12 @@ pop(Pid) -> gen_server:cast(Pid, pop).
 -spec append(pid(), list(event())) -> ok.
 append(Pid, Events) -> gen_server:cast(Pid, {append, Events}).
 
+-spec debug(pid(), atom(), integer(), pid()) -> ok.
+debug(PidChannel, Type, Period, Pid) ->
+  erlang:start_timer(10, PidChannel, {debug, {Type, Period, Pid}}).
+
+%% API for behaviour implementations
+
 -spec route(atom(), list(event()), ctx()) -> ctx().
 route(_, [], Ctx) -> Ctx;
 route(Module, Events, #{skctx := SinkCtx}=Ctx) ->
@@ -69,13 +75,6 @@ route(Module, Events, #{skctx := SinkCtx}=Ctx) ->
       % something goes wrong! Leave memory as it is.
       Module:nack(Ctx)
   end.
-
--spec debug(pid(), atom(), integer(), pid()) -> ok.
-debug(PidChannel, Type, Period, Pid) ->
-  erlang:start_timer(10, PidChannel, {debug, {Type, Period, Pid}}).
-
-%% API for behaviour implementations
-
 
 handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
   {reply, ok, Ctx#{skctx => SinkCtx}};
