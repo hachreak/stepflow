@@ -30,16 +30,13 @@
 
 %% Callbacks
 
-% @doc Configure channel implementation.
-% @end
+% @doc Configure channel implementation. @end
 -callback config(ctx()) -> {ok, ctx()}  | {error, term()}.
 
-% @doc Confirm the event has been processed successfully.
-% @end
+% @doc Confirm the event has been processed successfully. @end
 -callback ack(ctx()) -> ctx().
 
-% @end Called in case the event has NOT been processed successfully.
-% @end
+% @doc Called in case the event has NOT been processed successfully. @end
 -callback nack(ctx()) -> ctx().
 
 %%====================================================================
@@ -76,6 +73,8 @@ route(Module, Events, #{skctx := SinkCtx}=Ctx) ->
       Module:nack(Ctx)
   end.
 
+handle_call(setup, _From, Ctx) ->
+  {reply, ok, Ctx};
 handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
   {reply, ok, Ctx#{skctx => SinkCtx}};
 handle_call(Msg, _From, Ctx) ->

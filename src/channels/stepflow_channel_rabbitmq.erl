@@ -30,7 +30,6 @@
 
 -type ctx()   :: map().
 -type event() :: stepflow_event:event().
--type skctx() :: stepflow_channel:skctx().
 
 %% Callbacks gen_server
 
@@ -41,14 +40,12 @@ start_link(Config) ->
 -spec init(list(ctx())) -> {ok, ctx()}.
 init([Config]) -> {ok, disconnect(Config)}.
 
--spec handle_call(setup | {connect_sink, skctx()}, {pid(), term()}, ctx()) ->
-    {reply, ok, ctx()}.
-% @doc setup connection with the rabbitmq server @end
-handle_call(setup, _From, Ctx) ->
-  Ctx2 = handle_connect(Ctx),
-  {reply, ok, Ctx2};
-% @doc connect to the sink @end
+-spec handle_call(any(), {pid(), term()}, ctx()) -> {reply, ok, ctx()}.
+handle_call(setup, From, Ctx) ->
+  % setup connection with the rabbitmq server
+  stepflow_channel:handle_call(setup, From, handle_connect(Ctx));
 handle_call({connect_sink, _SinkCtx}=Msg, From, Ctx) ->
+  % connect to the sink
   case queue_binding(Ctx) of
     {error, _}=Error -> {reply, Error, Ctx};
     {ok, Ctx2} -> stepflow_channel:handle_call(Msg, From, Ctx2)

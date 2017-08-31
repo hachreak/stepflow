@@ -28,7 +28,6 @@
 
 -type ctx()   :: map().
 -type event() :: stepflow_event:event().
--type skctx() :: stepflow_channel:skctx().
 
 %% Callbacks channel
 
@@ -53,10 +52,7 @@ init([Config]) ->
   % erlang:start_timer(3000, self(), flush),
   {ok, reset(Config)}.
 
--spec handle_call(setup | {connect_sink, skctx()}, {pid(), term()}, ctx()) ->
-    {reply, ok, ctx()}.
-handle_call(setup, _From, Ctx) ->
-  {reply, ok, Ctx};
+-spec handle_call(any(), {pid(), term()}, ctx()) -> {reply, ok, ctx()}.
 handle_call(Msg, From, Ctx) ->
   stepflow_channel:handle_call(Msg, From, Ctx).
 

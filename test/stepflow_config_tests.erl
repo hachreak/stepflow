@@ -24,7 +24,7 @@ load_test() ->
                                     }.
     source FromMsg = stepflow_source_message[Squeezer]#{}.
     channel Mnesia = stepflow_channel_mnesia#{
-      flush_period => 10, capacity => 2, table => pippo
+      flush_period => 1000, capacity => 2, table => pippo
     }.
     sink Echo = stepflow_sink_echo[]#{}.
 
@@ -74,7 +74,7 @@ load_test() ->
     interceptor Counter = stepflow_interceptor_counter#{}.
     source FromMsg = stepflow_source_message[Counter]#{}.
     channel Buffer = stepflow_channel_mnesia#{
-        flush_period => 10, capacity => 7, table => mytable
+        flush_period => 1000, capacity => 7, table => mytable
     }.
     sink Echo = stepflow_sink_echo[]#{}.
 
@@ -97,7 +97,7 @@ load_test() ->
     }.
     source FromMsg = stepflow_source_message[Squeezer]#{}.
     channel Mnesia = stepflow_channel_mnesia#{
-      flush_period => 10, capacity => 2, table => pippo
+      flush_period => 1000, capacity => 2, table => pippo
     }.
     sink Echo = stepflow_sink_echo[]#{}.
 

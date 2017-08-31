@@ -30,7 +30,6 @@
 
 -type ctx()   :: map().
 -type event() :: stepflow_event:event().
--type skctx() :: stepflow_channel:skctx().
 
 -record(stepflow_channel_mnesia_events, {timestamp, events}).
 
@@ -65,10 +64,7 @@ init([#{table := Table}=Config]) ->
   create_table(Table),
   {ok, Config}.
 
--spec handle_call(setup | {connect_sink, skctx()}, {pid(), term()}, ctx()) ->
-    {reply, ok, ctx()}.
-handle_call(setup, _From, Ctx) ->
-  {reply, ok, Ctx};
+-spec handle_call(any(), {pid(), term()}, ctx()) -> {reply, ok, ctx()}.
 handle_call({connect_sink, _SinkCtx}=Msg, From, Ctx) ->
   {reply, ok, Ctx2} = stepflow_channel:handle_call(Msg, From, Ctx),
   {reply, ok, flush(Ctx2)};
@@ -115,8 +111,6 @@ create_table(Table) ->
     {aborted,{already_exists, _}} -> ok;
     Error -> Error
   end,
-  % ok = mnesia:add_table_copy(
-  %        stepflow_channel_mnesia_events, node(), disc_copy),
   ok = mnesia:wait_for_tables([Table], 5000).
 
 write(Table, Events) ->
@@ -131,8 +125,6 @@ flush(#{flush_period := FlushPeriod}=Ctx) ->
   io:format("Flush mnesia memory.. ~n"),
   erlang:start_timer(FlushPeriod, self(), flush),
   transactional_pop(Ctx).
-
-% transaction_pop(Ctx) ->
 
 -spec transactional_pop(ctx()) -> ctx().
 transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
@@ -154,6 +146,5 @@ maybe_pop(#{capacity := Capacity, table := Table}=Ctx) ->
     false -> Ctx
   end.
 
-% TODO limit max size of events
 catch_all(Table) ->
   qlc:q([R || R <- mnesia:table(Table)]).
