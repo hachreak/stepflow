@@ -35,11 +35,11 @@
 -spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
 config(Config) -> {ok, Config}.
 
--spec ack(ctx()) -> {ok, ctx()}.
-ack(Ctx) -> {ok, reset(Ctx)}.
+-spec ack(ctx()) -> ctx().
+ack(Ctx) -> reset(Ctx).
 
--spec nack(ctx()) -> {ok, ctx()}.
-nack(Ctx)-> {ok, Ctx}.
+-spec nack(ctx()) -> ctx().
+nack(Ctx)-> Ctx.
 
 %% Callbacks gen_server
 
@@ -99,11 +99,4 @@ flush({ok, Ctx2}, _Ctx) -> flush(pop(Ctx2), Ctx2).
 -spec pop(ctx()) -> {ok, ctx()} | {error, term()}.
 pop(#{memory := []}=Ctx) -> Ctx;
 pop(#{memory := Memory}=Ctx) ->
-  case stepflow_channel:route(?MODULE, Memory, Ctx) of
-    {error, _} ->
-      % sink fails to receive message, preserve memory!
-      Ctx;
-    {ok, Ctx2} ->
-      % sink successfully receive messages, memory already cleaned by ack()!
-      Ctx2
-  end.
+  stepflow_channel:route(?MODULE, Memory, Ctx).

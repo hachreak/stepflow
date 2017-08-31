@@ -109,18 +109,16 @@ config(Config) ->
                durable => true, encoder => Encoder,
                host => Host, port => Port, queue => RoutingKey}}.
 
--spec ack(ctx()) -> {ok, ctx()}.
-% @doc ack received, I can remove the events from memory. @end
+-spec ack(ctx()) -> ctx().
 ack(#{channel := Channel, tag := Tag}=Ctx) ->
   ok = amqp_channel:cast(Channel, #'basic.ack'{delivery_tag = Tag}),
-  {ok, maps:remove(tag, Ctx)}.
+  maps:remove(tag, Ctx).
 
--spec nack(ctx()) -> {ok, ctx()}.
-% @doc nack received, leave the events inside the memory. @end
+-spec nack(ctx()) -> ctx().
 nack(Ctx)->
   % TODO add a strategy to reconnect!
   disconnect(Ctx),
-  {ok, Ctx}.
+  Ctx.
 
 %% Private functions
 
@@ -133,12 +131,7 @@ append(Events, #{exchange:=Exchange, routing_key:=RoutingKey,
 
 pop({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
         #{encoder := Encoder}=Ctx) ->
-  %% A delivery
-  case stepflow_channel:route(?MODULE, Encoder:decode(Binary),
-                              Ctx#{tag => Tag}) of
-    {ok, Ctx2} -> Ctx2;
-    {error, sink_fails} -> Ctx
-  end.
+  stepflow_channel:route(?MODULE, Encoder:decode(Binary), Ctx#{tag => Tag}).
 
 -spec handle_connect(ctx()) -> ctx().
 handle_connect(#{status := online}=Ctx) -> Ctx;

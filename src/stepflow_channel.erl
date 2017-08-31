@@ -36,11 +36,11 @@
 
 % @doc Confirm the event has been processed successfully.
 % @end
--callback ack(ctx()) -> {ok, ctx()}.
+-callback ack(ctx()) -> ctx().
 
 % @end Called in case the event has NOT been processed successfully.
 % @end
--callback nack(ctx()) -> {ok, ctx()}.
+-callback nack(ctx()) -> ctx().
 
 %%====================================================================
 %% API
@@ -58,16 +58,16 @@ pop(Pid) -> gen_server:cast(Pid, pop).
 -spec append(pid(), list(event())) -> ok.
 append(Pid, Events) -> gen_server:cast(Pid, {append, Events}).
 
--spec route(atom(), list(event()), ctx()) ->
-    {ok, ctx()} | {error, term()}.
-route(_, [], Ctx) -> {ok, Ctx};
+-spec route(atom(), list(event()), ctx()) -> ctx().
+route(_, [], Ctx) -> Ctx;
 route(Module, Events, #{skctx := SinkCtx}=Ctx) ->
   case stepflow_sink:process(Events, SinkCtx) of
-    {ok, SinkCtx2} -> Module:ack(Ctx#{skctx => SinkCtx2});
+    {ok, SinkCtx2} ->
+      % events processed!
+      Module:ack(Ctx#{skctx => SinkCtx2});
     {error, _} ->
       % something goes wrong! Leave memory as it is.
-      Module:nack(Ctx),
-      {error, sink_fails}
+      Module:nack(Ctx)
   end.
 
 -spec debug(pid(), atom(), integer(), pid()) -> ok.

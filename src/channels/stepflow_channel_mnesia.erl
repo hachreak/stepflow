@@ -44,14 +44,14 @@ config(#{}=Config) ->
   {ok, Config#{flush_period => FlushPeriod, capacity => Capacity,
                table => Table}}.
 
--spec ack(ctx()) -> {ok, ctx()}.
+-spec ack(ctx()) -> ctx().
 ack(#{timestamps := Timestamps, table := Table}=Ctx) ->
   % TODO improve deleting all in one time!
   [mnesia:delete({Table, Timestamp}) || Timestamp <- Timestamps],
-  {ok, maps:remove(timestamps, Ctx)}.
+  maps:remove(timestamps, Ctx).
 
--spec nack(ctx()) -> {ok, ctx()}.
-nack(Ctx)-> {ok, maps:remove(timestamps, Ctx)}.
+-spec nack(ctx()) -> ctx().
+nack(Ctx)-> maps:remove(timestamps, Ctx).
 
 %% Callbacks gen_server
 
@@ -98,8 +98,7 @@ code_change(_OldVsn, Ctx, _Extra) ->
 
 append(Events, #{table := Table}=Ctx) ->
   write(Table, Events),
-  maybe_pop(Ctx),
-  Ctx.
+  maybe_pop(Ctx).
 
 create_schema() ->
   mnesia:create_schema([node()]),
@@ -147,15 +146,12 @@ transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
   end).
 
 pop(Events, Ctx) ->
-  case stepflow_channel:route(?MODULE, Events, Ctx) of
-    {ok, Ctx2} -> Ctx2;
-    {error, sink_fails} -> Ctx
-  end.
+  stepflow_channel:route(?MODULE, Events, Ctx).
 
 maybe_pop(#{capacity := Capacity, table := Table}=Ctx) ->
   case mnesia:table_info(Table, size) >= Capacity of
     true -> transactional_pop(Ctx);
-    false -> ok
+    false -> Ctx
   end.
 
 % TODO limit max size of events
