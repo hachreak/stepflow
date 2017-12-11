@@ -12,8 +12,10 @@
   setup/1,
   connect_sink/2,
   debug/4,
+  get_sink/1,
   pop/1,
-  route/3
+  route/3,
+  update_sink/2
 ]).
 
 -export([
@@ -46,6 +48,11 @@
 -spec connect_sink(pid(), skctx()) -> ok.
 connect_sink(Pid, SinkCtx) -> gen_server:call(Pid, {connect_sink, SinkCtx}).
 
+update_sink(Pid, CtxOfSinkCtx) ->
+  gen_server:call(Pid, {update_sink, CtxOfSinkCtx}).
+
+get_sink(Pid) -> gen_server:call(Pid, get_sink).
+
 -spec setup(pid()) -> ok.
 setup(Pid) -> gen_server:call(Pid, setup).
 
@@ -77,6 +84,9 @@ handle_call(setup, _From, Ctx) ->
   {reply, ok, Ctx};
 handle_call({connect_sink, SinkCtx}, _From, Ctx) ->
   {reply, ok, Ctx#{skctx => SinkCtx}};
+handle_call({update_sink, CtxOfSinkCtx}, _From, #{skctx := SinkCtx}=Ctx) ->
+  {reply, ok, Ctx#{skctx => stepflow_sink:update_ctx(CtxOfSinkCtx, SinkCtx)}};
+handle_call(get_sink, _From, #{skctx := SinkCtx}=Ctx) -> {reply, SinkCtx, Ctx};
 handle_call(Msg, _From, Ctx) ->
   warning("handle_call", Msg),
   {reply, Msg, Ctx}.

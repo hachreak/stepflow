@@ -9,6 +9,7 @@
 
 -export([
   config/3,
+  update_ctx/2,
   process/2
 ]).
 
@@ -33,6 +34,9 @@ config(Module, Ctx, InsConfig) ->
   {ok, Ctx2} = Module:handle_init(Ctx),
   InCtxs = stepflow_interceptor:init_all(InsConfig),
   {ok, #{module => Module, ctx => Ctx2, inctxs => InCtxs}}.
+
+update_ctx(NewCtx, Ctx) ->
+  Ctx#{ctx => NewCtx}.
 
 -spec process(list(event()), skctx()) ->
     {ok, skctx()} | {reject, skctx()} | {error, term()}.
