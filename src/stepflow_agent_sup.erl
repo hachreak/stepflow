@@ -55,13 +55,11 @@ init([]) ->
 
 -spec init_source(pid(), input(), list(pid())) -> pid().
 init_source(_PidAgentSup, none, _PidCs) -> none;
-init_source(PidAgentSup, {Source, Init}, PidCs) ->
-  {ok, Ctx} = stepflow_source:config(Init),
+init_source(PidAgentSup, {Source, Ctx}, PidCs) ->
+  % {ok, Ctx} = stepflow_source:config(Init),
   {ok, PidS} = supervisor:start_child(
           PidAgentSup, child("source", Source, Ctx)),
-  lists:foreach(fun(PidC) ->
-      stepflow_source:setup_channel(PidS, PidC)
-    end, PidCs),
+  Source:setup_channels(PidS, PidCs),
   PidS.
 
 -spec init_outputs(pid(), outputs()) -> list(pid()).

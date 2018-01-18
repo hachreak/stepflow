@@ -7,12 +7,12 @@
 
 -author('Leonardo Rossi <leonardo.rossi@studenti.unipr.it>').
 
-% -behaviour(stepflow_source).
+-behaviour(stepflow_source).
 -behaviour(gen_server).
 
 -export([
   append/2,
-  sync_append/2
+  setup_channels/2
 ]).
 
 -export([
@@ -30,15 +30,15 @@
 
 %% API
 
--spec sync_append(pid(), event() | list(event())) -> ok | {noproc, any()}.
-sync_append(Pid, Events) when is_list(Events) ->
-  gen_server:call(Pid, {append, Events});
-sync_append(Pid, Events) -> sync_append(Pid, [Events]).
-
 -spec append(pid(), event() | list(event())) -> ok.
 append(Pid, Events) when is_list(Events) ->
-  gen_server:cast(Pid, {append, Events});
+  gen_server:call(Pid, {append, Events});
 append(Pid, Event) -> append(Pid, [Event]).
+
+%% Callbacks
+
+setup_channels(PidS, PidCs) ->
+  gen_server:call(PidS, {setup, channels, PidCs}).
 
 %% Callbacks gen_server
 
@@ -47,23 +47,23 @@ start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
 -spec init(list(ctx())) -> {ok, ctx()}.
-init([Config]) ->
-  stepflow_source:init({ok, Config}).
+init([{ItCtxs, Config}]) ->
+  {ok, SrcCtx} = stepflow_source:init(ItCtxs),
+  {ok, Config#{source => SrcCtx}}.
 
--spec handle_call({setup_channel, pid()} |
+-spec handle_call({setup, channels, list(pid())} |
                   {append, list(event())}, {pid(), term()}, ctx()) ->
     {reply, ok, ctx()}.
-handle_call({append, Events}, _From,
-            #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
-  {ok, InCtxs2} = stepflow_source:append(ChPids, Events, InCtxs),
-  {reply, ok, Ctx#{inctxs := InCtxs2}};
+handle_call({setup, channels, PidCs}, _From, #{source := SrcCtx}=Ctx) ->
+  SrcCtx2 = stepflow_source:setup(PidCs, SrcCtx),
+  {reply, ok, Ctx#{source => SrcCtx2}};
+handle_call({append, Events}, _From, #{source := SrcCtx}=Ctx) ->
+  {ok, SrcCtx2} = stepflow_source:append(Events, SrcCtx),
+  {reply, ok, Ctx#{source := SrcCtx2}};
 handle_call(Msg, From, Ctx) ->
   stepflow_source:handle_call(Msg, From, Ctx).
 
--spec handle_cast({append, list(event())}, ctx()) -> {noreply, ctx()}.
-handle_cast({append, Events}, #{inctxs := InCtxs, channels := ChPids}=Ctx) ->
-  {ok, InCtxs2} = stepflow_source:append(ChPids, Events, InCtxs),
-  {noreply, Ctx#{inctxs := InCtxs2}};
+% -spec handle_cast({append, list(event())}, ctx()) -> {noreply, ctx()}.
 handle_cast(Msg, Ctx) -> stepflow_source:handle_cast(Msg, Ctx).
 
 handle_info(Msg, Ctx) -> stepflow_source:handle_info(Msg, Ctx).
