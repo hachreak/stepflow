@@ -22,8 +22,8 @@
 
 -export([
   ack/1,
-  config/1,
-  nack/1
+  nack/1,
+  update_chctx/2
 ]).
 
 -type ctx()   :: map().
@@ -31,14 +31,13 @@
 
 %% Callbacks channel
 
--spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
-config(Config) -> {ok, Config}.
-
 -spec ack(ctx()) -> ctx().
-ack(Ctx) -> reset(Ctx).
+ack(Ctx) -> reset_memory(Ctx).
 
 -spec nack(ctx()) -> ctx().
 nack(Ctx)-> Ctx.
+
+update_chctx(Ctx, ChCtx) -> Ctx#{chctx => ChCtx}.
 
 %% Callbacks gen_server
 
@@ -46,27 +45,32 @@ nack(Ctx)-> Ctx.
 start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
--spec init(list(ctx())) -> {ok, ctx()}.
-init([Config]) ->
+% -spec init(list(ctx())) -> {ok, ctx()}.
+init([{SkCtx, Config}]) ->
+  Config2 = case stepflow_channel:init(SkCtx) of
+    {ok, ChCtx} -> Config#{chctx => ChCtx};
+    no_sink -> Config
+  end,
   % TODO enable in future if we need
   % erlang:start_timer(3000, self(), flush),
-  {ok, reset(Config)}.
+  {ok, reset_memory(Config2)}.
 
--spec handle_call(any(), {pid(), term()}, ctx()) -> {reply, ok, ctx()}.
-handle_call(Msg, From, Ctx) ->
-  stepflow_channel:handle_call(Msg, From, Ctx).
+handle_call(debug, _From, Ctx) ->
+  {reply, Ctx, Ctx};
+handle_call(_, _From, Ctx) ->
+  {reply, not_implemented, Ctx}.
 
--spec handle_cast({append, list(event())} | pop, ctx()) -> {noreply, ctx()}.
 handle_cast({append, Events}, Ctx) ->
-  {noreply, append(Events, Ctx)};
+  {noreply, do_append(Events, Ctx)};
 handle_cast(pop, Ctx) ->
-  {noreply, pop(Ctx)};
-handle_cast(Msg, Ctx) -> stepflow_channel:handle_cast(Msg, Ctx).
+  {noreply, do_pop(Ctx)};
+handle_cast(Msg, Ctx) ->
+  error_logger:warning_msg("[Channel] not implemented ~p~n", [Msg]),
 
-handle_info({timeout, _, flush}, Ctx) ->
-  io:format("Flush memory.. ~p~n", [maps:get(memory, Ctx)]),
-  {noreply, flush({ok, Ctx}, Ctx)};
-handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
+  {noreply, Ctx}.
+
+handle_info(_Msg, Ctx) ->
+  {noreply, Ctx}.
 
 terminate(_Reason, _Ctx) ->
   io:format("Terminate!!~n"),
@@ -78,21 +82,16 @@ code_change(_OldVsn, Ctx, _Extra) ->
 
 %% Private functions
 
-reset(Ctx) -> Ctx#{memory => []}.
+reset_memory(Ctx) -> Ctx#{memory => []}.
 
-append(Events, #{memory := Memory}=Ctx) ->
+do_append(Events, #{memory := Memory}=Ctx) ->
   % save the new value
   Ctx2 = Ctx#{memory => lists:flatten([Events, Memory])},
   % trigger pop!
   stepflow_channel:pop(self()),
   Ctx2.
 
-flush(#{memory := []}, Ctx) ->
-  erlang:start_timer(5000, self(), flush),
-  Ctx#{memory => []};
-flush({ok, Ctx2}, _Ctx) -> flush(pop(Ctx2), Ctx2).
-
--spec pop(ctx()) -> {ok, ctx()} | {error, term()}.
-pop(#{memory := []}=Ctx) -> Ctx;
-pop(#{memory := Memory}=Ctx) ->
-  stepflow_channel:route(?MODULE, Memory, Ctx).
+-spec do_pop(ctx()) -> {ok, ctx()} | {error, term()}.
+do_pop(#{memory := []}=Ctx) -> Ctx;
+do_pop(#{memory := Memory, chctx := ChCtx}=Ctx) ->
+  stepflow_channel:route(?MODULE, Ctx, Memory, ChCtx).

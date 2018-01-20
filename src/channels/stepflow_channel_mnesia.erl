@@ -24,8 +24,8 @@
 
 -export([
   ack/1,
-  config/1,
-  nack/1
+  nack/1,
+  update_chctx/2
 ]).
 
 -type ctx()   :: map().
@@ -34,14 +34,6 @@
 -record(stepflow_channel_mnesia_events, {timestamp, events}).
 
 %% Callbacks channel
-
--spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
-config(#{}=Config) ->
-  FlushPeriod = maps:get(flush_period, Config, 3000),
-  Capacity = maps:get(capacity, Config, 5),
-  Table = maps:get(table, Config, stepflow_channel_mnesia_events),
-  {ok, Config#{flush_period => FlushPeriod, capacity => Capacity,
-               table => Table}}.
 
 -spec ack(ctx()) -> ctx().
 ack(#{timestamps := Timestamps, table := Table}=Ctx) ->
@@ -52,6 +44,8 @@ ack(#{timestamps := Timestamps, table := Table}=Ctx) ->
 -spec nack(ctx()) -> ctx().
 nack(Ctx)-> maps:remove(timestamps, Ctx).
 
+update_chctx(Ctx, ChCtx) -> Ctx#{chctx => ChCtx}.
+
 %% Callbacks gen_server
 
 -spec start_link(ctx()) -> {ok, pid()} | ignore | {error, term()}.
@@ -59,15 +53,20 @@ start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
 -spec init(list(ctx())) -> {ok, ctx()}.
-init([#{table := Table}=Config]) ->
+init([{SkCtx, Config}]) ->
+  Config2 = case stepflow_channel:init(SkCtx) of
+    {ok, ChCtx} -> update_chctx(Config, ChCtx);
+    no_sink -> Config
+  end,
+  {ok, Ctx} = config(Config2),
   create_schema(),
-  create_table(Table),
-  {ok, Config}.
+  create_table(Ctx),
+  io:format("init: ~p~n~n", [Ctx]),
+  {ok, flush(Ctx)}.
 
 -spec handle_call(any(), {pid(), term()}, ctx()) -> {reply, ok, ctx()}.
-handle_call({connect_sink, _SinkCtx}=Msg, From, Ctx) ->
-  {reply, ok, Ctx2} = stepflow_channel:handle_call(Msg, From, Ctx),
-  {reply, ok, flush(Ctx2)};
+handle_call(debug, _From, Ctx) ->
+  {reply, Ctx, Ctx};
 handle_call(Msg, From, Ctx) ->
   stepflow_channel:handle_call(Msg, From, Ctx).
 
@@ -79,6 +78,7 @@ handle_cast(pop, Ctx) ->
 handle_cast(Msg, Ctx) -> stepflow_channel:handle_cast(Msg, Ctx).
 
 handle_info({timeout, _, flush}, Ctx) ->
+  io:format("Flush: ~p~n", [Ctx]),
   {noreply, flush(Ctx)};
 handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
@@ -92,6 +92,14 @@ code_change(_OldVsn, Ctx, _Extra) ->
 
 %% Private functions
 
+-spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
+config(#{}=Config) ->
+  FlushPeriod = maps:get(flush_period, Config, 3000),
+  Capacity = maps:get(capacity, Config, 5),
+  Table = maps:get(table, Config, stepflow_channel_mnesia_events),
+  {ok, Config#{flush_period => FlushPeriod, capacity => Capacity,
+               table => Table}}.
+
 append(Events, #{table := Table}=Ctx) ->
   write(Table, Events),
   maybe_pop(Ctx).
@@ -100,7 +108,7 @@ create_schema() ->
   mnesia:create_schema([node()]),
   application:start(mnesia).
 
-create_table(Table) ->
+create_table(#{table := Table}) ->
   ok = case mnesia:create_table(Table, [
         {type, ordered_set},
         {attributes, record_info(fields, stepflow_channel_mnesia_events)},
@@ -121,7 +129,7 @@ write(Table, Events) ->
         }, write)
     end).
 
-flush(#{flush_period := FlushPeriod}=Ctx) ->
+flush(#{chctx := #{skctx := _}, flush_period := FlushPeriod}=Ctx) ->
   io:format("Flush mnesia memory.. ~n"),
   erlang:start_timer(FlushPeriod, self(), flush),
   transactional_pop(Ctx).
@@ -131,14 +139,15 @@ transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
   mnesia:activity(transaction, fun() ->
       Bulk = qlc:eval(catch_all(Table), [{max_list_size, Capacity}]),
       % TODO check if bulk is empty!
-      Events = [R#stepflow_channel_mnesia_events.events || R <- Bulk],
+      Events = lists:flatten(
+                 [R#stepflow_channel_mnesia_events.events || R <- Bulk]),
       Timestamps = [R#stepflow_channel_mnesia_events.timestamp || R <- Bulk],
       % process a bulk of events
       pop(Events, Ctx#{timestamps => Timestamps})
   end).
 
-pop(Events, Ctx) ->
-  stepflow_channel:route(?MODULE, Events, Ctx).
+pop(Events, #{chctx := ChCtx}=Ctx) ->
+  stepflow_channel:route(?MODULE, Ctx, Events, ChCtx).
 
 maybe_pop(#{capacity := Capacity, table := Table}=Ctx) ->
   case mnesia:table_info(Table, size) >= Capacity of

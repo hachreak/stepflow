@@ -25,6 +25,7 @@
 -export([
   ack/1,
   config/1,
+  update_chctx/2,
   nack/1
 ]).
 
@@ -38,18 +39,17 @@ start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
 -spec init(list(ctx())) -> {ok, ctx()}.
-init([Config]) -> {ok, disconnect(Config)}.
+init([{SkCtx, Config}]) ->
+  Config2 = config(Config),
+  Config3 = case stepflow_channel:init(SkCtx) of
+    {ok, ChCtx} -> connect_to_sink(update_chctx(disconnect(Config2), ChCtx));
+    no_sink -> Config2
+  end,
+  {ok, Config3}.
 
 -spec handle_call(any(), {pid(), term()}, ctx()) -> {reply, ok, ctx()}.
-handle_call(setup, From, Ctx) ->
-  % setup connection with the rabbitmq server
-  stepflow_channel:handle_call(setup, From, handle_connect(Ctx));
-handle_call({connect_sink, _SinkCtx}=Msg, From, Ctx) ->
-  % connect to the sink
-  case queue_binding(Ctx) of
-    {error, _}=Error -> {reply, Error, Ctx};
-    {ok, Ctx2} -> stepflow_channel:handle_call(Msg, From, Ctx2)
-  end;
+handle_call(debug, _From, Ctx) ->
+  {reply, Ctx, Ctx};
 handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
 
@@ -78,33 +78,9 @@ code_change(_OldVsn, Ctx, _Extra) ->
   io:format("code changed !"),
   {ok, Ctx}.
 
-% -spec pop(skctx(), ctx()) -> {ok, skctx(), ctx()} | {error, term()}.
-% pop(_SinkCtx, _Ctx) ->
-%   % TODO implement!
-%   {error, not_implemented}.
-%   % get event
-%   % case amqp_channel:call(Channel, #'basic.get'{
-%   %     queue = Queue, no_ack = false}) of
-%   %   #'basic.get_empty'{} -> {error, empty};
-%   %   {#'basic.get_ok'{delivery_tag = Tag}, Events} ->
-%   %     case process(Channel, Tag, Events, SinkCtx) of
-%   %       {ok, SinkCtx2} -> {ok, SinkCtx2, Ctx};
-%   %       {error, sink_fails}=Error -> Error
-%   %     end
-%   % end.
-
 %% Callbacks channel
 
--spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
-config(Config) ->
-  Host = maps:get(host, Config, "localhost"),
-  Exchange = maps:get(exchange, Config, <<"stepflow_channel_rabbitmq">>),
-  RoutingKey = maps:get(routing_key, Config, <<"stepflow_channel_rabbitmq">>),
-  Port = maps:get(port, Config, 5672),
-  Encoder = maps:get(encoder, Config, stepflow_encoder_json),
-  {ok, Config#{exchange => Exchange, routing_key => RoutingKey,
-               durable => true, encoder => Encoder,
-               host => Host, port => Port, queue => RoutingKey}}.
+update_chctx(Ctx, ChCtx) -> Ctx#{chctx => ChCtx}.
 
 -spec ack(ctx()) -> ctx().
 ack(#{channel := Channel, tag := Tag}=Ctx) ->
@@ -119,6 +95,30 @@ nack(Ctx)->
 
 %% Private functions
 
+connect_to_sink(#{chctx := #{skctx := _}}=Ctx) ->
+  Ctx2 = handle_connect(Ctx),
+  % connect to the sink
+  case queue_binding(Ctx2) of
+    {error, _}=_Error ->
+      error_logger:warning_msg("[Channel] error connecting to the sink~n"),
+      Ctx2;
+    {ok, Ctx3} -> Ctx3
+  end;
+connect_to_sink(Ctx) ->
+  error_logger:warning_msg("[Channel] no sink configured~n"),
+  Ctx.
+
+-spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
+config(Config) ->
+  Host = maps:get(host, Config, "localhost"),
+  Exchange = maps:get(exchange, Config, <<"stepflow_channel_rabbitmq">>),
+  RoutingKey = maps:get(routing_key, Config, <<"stepflow_channel_rabbitmq">>),
+  Port = maps:get(port, Config, 5672),
+  Encoder = maps:get(encoder, Config, stepflow_encoder_json),
+  Config#{exchange => Exchange, routing_key => RoutingKey,
+               durable => true, encoder => Encoder,
+               host => Host, port => Port, queue => RoutingKey}.
+
 append(Events, #{exchange:=Exchange, routing_key:=RoutingKey,
                  channel:=Channel, encoder := Encoder}=Ctx) ->
   amqp_channel:cast(Channel, #'basic.publish'{
@@ -127,8 +127,9 @@ append(Events, #{exchange:=Exchange, routing_key:=RoutingKey,
   Ctx.
 
 pop({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
-        #{encoder := Encoder}=Ctx) ->
-  stepflow_channel:route(?MODULE, Encoder:decode(Binary), Ctx#{tag => Tag}).
+        #{encoder := Encoder, chctx := ChCtx}=Ctx) ->
+  stepflow_channel:route(
+    ?MODULE, Ctx#{tag => Tag}, Encoder:decode(Binary), ChCtx).
 
 -spec handle_connect(ctx()) -> ctx().
 handle_connect(#{status := online}=Ctx) -> Ctx;

@@ -6,22 +6,22 @@
 
 -include_lib("eunit/include/eunit.hrl").
 
-update_ctx_sink_test() ->
-  application:ensure_all_started(stepflow),
-  [{'Aggretator', {_, _, [PidC]}}] = stepflow_config:run("
-    source FromMsg = stepflow_source_message[]#{}.
-    channel Mnesia = stepflow_channel_mnesia#{
-      flush_period => 1000, capacity => 2, table => pippo
-    }.
-    sink Echo = stepflow_sink_echo[]#{}.
+% update_ctx_sink_test() ->
+%   application:ensure_all_started(stepflow),
+%   [{'Aggretator', {_, _, [PidC]}}] = stepflow_config:run("
+%     source FromMsg = stepflow_source_message[]#{}.
+%     channel Mnesia = stepflow_channel_mnesia#{
+%       flush_period => 1000, capacity => 2, table => pippo
+%     }.
+%     sink Echo = stepflow_sink_echo[]#{}.
 
-    flow Aggretator: FromMsg |> Mnesia |> Echo.
-  "),
-  stepflow_channel:update_sink(PidC, #{hello => world}),
-  % error_logger:error_msg("fuu: ~p~n", [])
-  #{module := stepflow_sink_echo,
-    ctx := #{hello := world}, inctxs := []} =
-     stepflow_channel:get_sink(PidC).
+%     flow Aggretator: FromMsg |> Mnesia |> Echo.
+%   "),
+%   stepflow_channel:update_sink(PidC, #{hello => world}),
+%   % error_logger:error_msg("fuu: ~p~n", [])
+%   #{module := stepflow_sink_echo,
+%     ctx := #{hello := world}, inctxs := []} =
+%      stepflow_channel:get_sink(PidC).
 
 load_test() ->
   application:ensure_all_started(stepflow),

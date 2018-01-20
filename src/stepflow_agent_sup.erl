@@ -56,7 +56,6 @@ init([]) ->
 -spec init_source(pid(), input(), list(pid())) -> pid().
 init_source(_PidAgentSup, none, _PidCs) -> none;
 init_source(PidAgentSup, {Source, Ctx}, PidCs) ->
-  % {ok, Ctx} = stepflow_source:config(Init),
   {ok, PidS} = supervisor:start_child(
           PidAgentSup, child("source", Source, Ctx)),
   Source:setup_channels(PidS, PidCs),
@@ -66,27 +65,15 @@ init_source(PidAgentSup, {Source, Ctx}, PidCs) ->
 init_outputs(PidAgentSup, Outputs) ->
   Indices = lists:seq(1, length(Outputs)),
   lists:map(fun({Index, {ChConfig, SkConfig}}) ->
-      SkCtx = init_sink(SkConfig),
-      PidC = init_channel(PidAgentSup, Index, ChConfig),
-      connect_sink(PidC, SkCtx),
+      PidC = init_channel(PidAgentSup, Index, ChConfig, SkConfig),
       PidC
     end, lists:zip(Indices, Outputs)).
 
-init_sink(none) -> none;
-init_sink({Module, {InterceptorsConfig, SkConfig}}) ->
-  {ok, SkCtx} = stepflow_sink:config(Module, SkConfig, InterceptorsConfig),
-  SkCtx.
-
--spec init_channel(pid(), integer(), output()) -> pid().
-init_channel(PidAgentSup, Index, {Channel, Init}) ->
-  {ok, Ctx} = Channel:config(Init),
+% -spec init_channel(pid(), integer(), output()) -> pid().
+init_channel(PidAgentSup, Index, {Channel, Ctx}, SkCtx) ->
   {ok, PidC} = supervisor:start_child(
-          PidAgentSup, child(name(channel, Index), Channel, Ctx)),
-  ok = stepflow_channel:setup(PidC),
+          PidAgentSup, child(name(channel, Index), Channel, {SkCtx, Ctx})),
   PidC.
-
-connect_sink(_PidC, none) -> ok;
-connect_sink(PidC, SkCtx) -> ok = stepflow_channel:connect_sink(PidC, SkCtx).
 
 -spec child(string(), atom(), skctx() | srctx() | chctx()) ->
     {string(),
