@@ -21,6 +21,7 @@
   handle_info/2,
   init/1,
   nack/1,
+  pop/1,
   set_sink/2
 ]).
 
@@ -59,12 +60,12 @@ append(Events, #{table := Table}=Ctx) ->
   maybe_run(fun() -> stepflow_channel:pop(self()) end, Ctx),
   Ctx.
 
+pop(Ctx) ->
+  transactional_pop(Ctx).
+
 handle_call(Msg, _From, Ctx) ->
   error_logger:warning_msg("[Channel] not implemented ~p~n", [Msg]),
   {reply, not_implemented, Ctx}.
-
-handle_cast(pop, Ctx) ->
-  transactional_pop(Ctx);
 
 handle_cast(Msg, Ctx) ->
   error_logger:warning_msg("[Channel] not implemented ~p~n", [Msg]),
@@ -117,7 +118,6 @@ flush(#{flush_period := FlushPeriod}=Ctx) ->
   erlang:start_timer(FlushPeriod, self(), flush),
   stepflow_channel:pop(self()),
   Ctx.
-  % transactional_pop(Ctx).
 
 -spec transactional_pop(ctx()) -> ctx().
 transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
@@ -128,11 +128,8 @@ transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
                  [R#stepflow_channel_mnesia_events.events || R <- Bulk]),
       Timestamps = [R#stepflow_channel_mnesia_events.timestamp || R <- Bulk],
       % process a bulk of events
-      pop(Events, Ctx#{timestamps => Timestamps})
+      {Events, Ctx#{timestamps => Timestamps}}
   end).
-
-pop(Events, Ctx) ->
-  {route, Events, Ctx}.
 
 maybe_run(Fun, #{capacity := Capacity, table := Table}) ->
   case mnesia:table_info(Table, size) >= Capacity of

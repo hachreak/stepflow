@@ -19,6 +19,7 @@
   handle_info/2,
   init/1,
   nack/1,
+  pop/1,
   set_sink/2
 ]).
 
@@ -46,18 +47,16 @@ connect(Ctx) -> Ctx.
 
 disconnect(Ctx) -> Ctx.
 
-append(Events, #{memory := Memory}=Ctx) ->
-  % save the new value
-  Ctx2 = Ctx#{memory => lists:flatten([Events, Memory])},
+append(Events, Ctx) ->
   % trigger pop!
   stepflow_channel:pop(self()),
-  Ctx2.
+  do_append(Events, Ctx).
+
+pop(Ctx) -> do_pop(Ctx).
 
 handle_call(Msg, _From, Ctx) ->
   error_logger:warning_msg("[Channel] not implemented ~p~n", [Msg]),
   {reply, not_implemented, Ctx}.
-
-handle_cast(pop, Ctx) -> do_pop(Ctx);
 
 handle_cast(Msg, Ctx) ->
   error_logger:warning_msg("[Channel] not implemented ~p~n", [Msg]),
@@ -70,6 +69,10 @@ handle_info(_Msg, Ctx) ->
 
 reset_memory(Ctx) -> Ctx#{memory => []}.
 
-do_pop(#{memory := []}=Ctx) -> {noreply, Ctx};
+do_append(Events, #{memory := Memory}=Ctx) ->
+  % save the new value
+  Ctx#{memory => lists:flatten([Events, Memory])}.
+
+% do_pop(#{memory := []}=Ctx) -> {noreply, Ctx};
 do_pop(#{memory := Memory}=Ctx) ->
-  {route, Memory, Ctx}.
+  {Memory, Ctx}.

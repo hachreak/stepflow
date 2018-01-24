@@ -21,6 +21,7 @@
   handle_info/2,
   init/1,
   nack/1,
+  pop/1,
   set_sink/2
 ]).
 
@@ -46,7 +47,9 @@ handle_info(#'basic.cancel_ok'{}, Ctx) ->
 
 % @doc new message to deliver to the sink. @end
 handle_info({#'basic.deliver'{}, _}=Msg, Ctx) ->
-  pop(Msg, Ctx);
+  stepflow_channel:pop(self()),
+  Ctx2 = do_pop(Msg, Ctx),
+  {noreply, Ctx2};
 
 handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
@@ -90,6 +93,9 @@ append(Events, #{exchange:=Exchange, routing_key:=RoutingKey,
     }, #amqp_msg{payload=Encoder:encode(Events)}),
   Ctx.
 
+pop(#{msgs := Events}=Ctx) -> {Events, maps:remove(msgs, Ctx)};
+pop(Ctx) -> {[], Ctx}.
+
 % -spec connect(ctx()) -> ctx().
 connect(#{status := online}=Ctx) -> Ctx;
 connect(#{host := Host, exchange := Exchange, durable := Durable,
@@ -132,6 +138,6 @@ queue_binding(#{exchange := Exchange, channel := Channel, queue := Queue,
   {ok, Ctx};
 queue_binding(_) -> {error, disconnected}.
 
-pop({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
+do_pop({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
     #{encoder := Encoder}=Ctx) ->
-  {route, Encoder:decode(Binary), Ctx#{tag => Tag}}.
+  Ctx#{tag => Tag, msgs => Encoder:decode(Binary)}.

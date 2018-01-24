@@ -39,7 +39,7 @@
 
 -callback append(list(event()), ctx()) -> ctx().
 
-% -callback pop() -> ok.
+-callback pop(ctx()) -> {list(event()), ctx()}.
 
 -callback init(map()) -> ctx().
 
@@ -89,6 +89,11 @@ handle_cast({route, Events}, Ctx) -> do_route(Events, Ctx);
 handle_cast({append, Events}, #{ch := {Module, ChCtx}}=Ctx) ->
   ChCtx2 = Module:append(Events, ChCtx),
   {noreply, Ctx#{ch => {Module, ChCtx2}}};
+
+handle_cast(pop, #{ch := {Module, ChCtx}}=Ctx) ->
+  {Events, ChCtx2} = Module:pop(ChCtx),
+  Ctx2 = do_route(Events, Ctx#{ch := {Module, ChCtx2}}),
+  {noreply, Ctx2};
 
 handle_cast(Msg, #{ch := {Module, ChCtx}}=Ctx) ->
   case Module:handle_cast(Msg, ChCtx) of
