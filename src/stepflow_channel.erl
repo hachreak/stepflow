@@ -96,22 +96,12 @@ handle_cast(pop, #{ch := {Module, ChCtx}}=Ctx) ->
   {noreply, Ctx2};
 
 handle_cast(Msg, #{ch := {Module, ChCtx}}=Ctx) ->
-  case Module:handle_cast(Msg, ChCtx) of
-    {route, Events, ChCtx2} ->
-      Ctx2 = do_route(Events, Ctx#{ch := {Module, ChCtx2}}),
-      {noreply, Ctx2};
-    {Reply, ChCtx2} ->
-      {Reply, Ctx#{ch => {Module, ChCtx2}}}
-  end.
+  {Reply, ChCtx2} = Module:handle_cast(Msg, ChCtx),
+  {Reply, Ctx#{ch => {Module, ChCtx2}}}.
 
 handle_info(Msg, #{ch := {Module, ChCtx}}=Ctx) ->
-  case Module:handle_info(Msg, ChCtx) of
-    {route, Events, ChCtx2} ->
-      Ctx2 = do_route(Events, Ctx#{ch := {Module, ChCtx2}}),
-      {noreply, Ctx2};
-    {Reply, ChCtx2} ->
-      {Reply, Ctx#{ch => {Module, ChCtx2}}}
-  end.
+  {Reply, ChCtx2} = Module:handle_info(Msg, ChCtx),
+  {Reply, Ctx#{ch => {Module, ChCtx2}}}.
 
 terminate(_Reason, _Ctx) ->
   io:format("Terminate!!~n"),
