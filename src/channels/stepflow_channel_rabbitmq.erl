@@ -8,79 +8,51 @@
 -author('Leonardo Rossi <leonardo.rossi@studenti.unipr.it>').
 
 -behaviour(stepflow_channel).
--behaviour(gen_server).
+% -behaviour(gen_server).
 
 -include_lib("amqp_client/include/amqp_client.hrl").
 
 -export([
-  start_link/1,
-  init/1,
-  code_change/3,
+  ack/1,
+  append/2,
+  connect/1,
+  disconnect/1,
   handle_call/3,
   handle_cast/2,
   handle_info/2,
-  terminate/2
-]).
-
--export([
-  ack/1,
-  config/1,
-  update_chctx/2,
-  nack/1
+  init/1,
+  nack/1,
+  set_sink/2
 ]).
 
 -type ctx()   :: map().
 -type event() :: stepflow_event:event().
 
-%% Callbacks gen_server
+%% Callbacks
 
--spec start_link(ctx()) -> {ok, pid()} | ignore | {error, term()}.
-start_link(Config) ->
-  gen_server:start_link(?MODULE, [Config], []).
-
--spec init(list(ctx())) -> {ok, ctx()}.
-init([{SkCtx, Config}]) ->
-  Config2 = config(Config),
-  Config3 = case stepflow_channel:init(SkCtx) of
-    {ok, ChCtx} -> connect_to_sink(update_chctx(disconnect(Config2), ChCtx));
-    no_sink -> Config2
-  end,
-  {ok, Config3}.
-
--spec handle_call(any(), {pid(), term()}, ctx()) -> {reply, ok, ctx()}.
-handle_call(debug, _From, Ctx) ->
-  {reply, Ctx, Ctx};
 handle_call(Input, _From, Ctx) ->
   {reply, Input, Ctx}.
 
--spec handle_cast({append, list(event())}, ctx()) -> {noreply, ctx()}.
-% @doc append a new message inside the queue @end
-handle_cast({append, Events}, Ctx) ->
-  {noreply, append(Events, Ctx)};
-handle_cast(Msg, Ctx) -> stepflow_channel:handle_cast(Msg, Ctx).
+handle_cast(Msg, Ctx) ->
+  error_logger:warning_msg("[Channel] message not processed ~p~n", [Msg]),
+  {noreply, Ctx}.
 
 handle_info(#'basic.consume_ok'{}, Ctx) ->
   %% This is the first message received
   {noreply, Ctx};
+
 handle_info(#'basic.cancel_ok'{}, Ctx) ->
   %% This is received when the subscription is cancelled
   Ctx2 = disconnect(Ctx),
   {noreply, Ctx2};
+
 % @doc new message to deliver to the sink. @end
-handle_info({#'basic.deliver'{}, _}=Msg, Ctx) -> {noreply, pop(Msg, Ctx)};
+handle_info({#'basic.deliver'{}, _}=Msg, Ctx) ->
+  pop(Msg, Ctx);
+
 handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
-terminate(_Reason, _Ctx) ->
-  io:format("Terminate!!~n"),
-  ok.
-
-code_change(_OldVsn, Ctx, _Extra) ->
-  io:format("code changed !"),
-  {ok, Ctx}.
-
 %% Callbacks channel
-
-update_chctx(Ctx, ChCtx) -> Ctx#{chctx => ChCtx}.
 
 -spec ack(ctx()) -> ctx().
 ack(#{channel := Channel, tag := Tag}=Ctx) ->
@@ -95,21 +67,20 @@ nack(Ctx)->
 
 %% Private functions
 
-connect_to_sink(#{chctx := #{skctx := _}}=Ctx) ->
-  Ctx2 = handle_connect(Ctx),
+% TODO check when no sink is set
+set_sink(none, Ctx) -> Ctx;
+set_sink(_SkCtx, Ctx) ->
+  % Ctx2 = connect(Ctx),
   % connect to the sink
-  case queue_binding(Ctx2) of
+  case queue_binding(Ctx) of
     {error, _}=_Error ->
       error_logger:warning_msg("[Channel] error connecting to the sink~n"),
-      Ctx2;
-    {ok, Ctx3} -> Ctx3
-  end;
-connect_to_sink(Ctx) ->
-  error_logger:warning_msg("[Channel] no sink configured~n"),
-  Ctx.
+      Ctx;
+    {ok, Ctx2} -> Ctx2
+  end.
 
--spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
-config(Config) ->
+-spec init(ctx()) -> {ok, ctx()}  | {error, term()}.
+init(Config) ->
   Host = maps:get(host, Config, "localhost"),
   Exchange = maps:get(exchange, Config, <<"stepflow_channel_rabbitmq">>),
   RoutingKey = maps:get(routing_key, Config, <<"stepflow_channel_rabbitmq">>),
@@ -127,13 +98,12 @@ append(Events, #{exchange:=Exchange, routing_key:=RoutingKey,
   Ctx.
 
 pop({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
-        #{encoder := Encoder, chctx := ChCtx}=Ctx) ->
-  stepflow_channel:route(
-    ?MODULE, Ctx#{tag => Tag}, Encoder:decode(Binary), ChCtx).
+    #{encoder := Encoder}=Ctx) ->
+  {route, Encoder:decode(Binary), Ctx#{tag => Tag}}.
 
--spec handle_connect(ctx()) -> ctx().
-handle_connect(#{status := online}=Ctx) -> Ctx;
-handle_connect(#{host := Host, exchange := Exchange, durable := Durable,
+% -spec connect(ctx()) -> ctx().
+connect(#{status := online}=Ctx) -> Ctx;
+connect(#{host := Host, exchange := Exchange, durable := Durable,
           port := Port, queue := Queue}=Config) ->
   {ok, Connection} =
         amqp_connection:start(#amqp_params_network{host = Host, port = Port}),

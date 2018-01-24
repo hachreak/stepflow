@@ -70,9 +70,10 @@ init_outputs(PidAgentSup, Outputs) ->
     end, lists:zip(Indices, Outputs)).
 
 % -spec init_channel(pid(), integer(), output()) -> pid().
-init_channel(PidAgentSup, Index, {Channel, Ctx}, SkCtx) ->
+init_channel(PidAgentSup, Index, ChannelCtx, SkCtx) ->
   {ok, PidC} = supervisor:start_child(
-          PidAgentSup, child(name(channel, Index), Channel, {SkCtx, Ctx})),
+          PidAgentSup, child(name(channel, Index),
+                             stepflow_channel, {SkCtx, ChannelCtx})),
   PidC.
 
 -spec child(string(), atom(), skctx() | srctx() | chctx()) ->

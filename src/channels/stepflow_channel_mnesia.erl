@@ -8,24 +8,20 @@
 -author('Leonardo Rossi <leonardo.rossi@studenti.unipr.it>').
 
 -behaviour(stepflow_channel).
--behaviour(gen_server).
 
 -include_lib("stdlib/include/qlc.hrl").
 
 -export([
-  start_link/1,
-  init/1,
-  code_change/3,
+  ack/1,
+  append/2,
+  connect/1,
+  disconnect/1,
   handle_call/3,
   handle_cast/2,
   handle_info/2,
-  terminate/2
-]).
-
--export([
-  ack/1,
+  init/1,
   nack/1,
-  update_chctx/2
+  set_sink/2
 ]).
 
 -type ctx()   :: map().
@@ -38,71 +34,61 @@
 -spec ack(ctx()) -> ctx().
 ack(#{timestamps := Timestamps, table := Table}=Ctx) ->
   % TODO improve deleting all in one time!
-  [mnesia:delete({Table, Timestamp}) || Timestamp <- Timestamps],
+  mnesia:activity(transaction, fun() ->
+      [mnesia:delete({Table, Timestamp}) || Timestamp <- Timestamps]
+    end),
   maps:remove(timestamps, Ctx).
 
 -spec nack(ctx()) -> ctx().
 nack(Ctx)-> maps:remove(timestamps, Ctx).
 
-update_chctx(Ctx, ChCtx) -> Ctx#{chctx => ChCtx}.
+set_sink(_SkCtx, Ctx) -> Ctx.
 
-%% Callbacks gen_server
-
--spec start_link(ctx()) -> {ok, pid()} | ignore | {error, term()}.
-start_link(Config) ->
-  gen_server:start_link(?MODULE, [Config], []).
-
--spec init(list(ctx())) -> {ok, ctx()}.
-init([{SkCtx, Config}]) ->
-  Config2 = case stepflow_channel:init(SkCtx) of
-    {ok, ChCtx} -> update_chctx(Config, ChCtx);
-    no_sink -> Config
-  end,
-  {ok, Ctx} = config(Config2),
+connect(Ctx) ->
   create_schema(),
   create_table(Ctx),
-  io:format("init: ~p~n~n", [Ctx]),
-  {ok, flush(Ctx)}.
+  flush(Ctx).
 
--spec handle_call(any(), {pid(), term()}, ctx()) -> {reply, ok, ctx()}.
-handle_call(debug, _From, Ctx) ->
-  {reply, Ctx, Ctx};
-handle_call(Msg, From, Ctx) ->
-  stepflow_channel:handle_call(Msg, From, Ctx).
+disconnect(Ctx) -> Ctx.
 
--spec handle_cast({append, list(event())} | pop, ctx()) -> {noreply, ctx()}.
-handle_cast({append, Events}, Ctx) ->
-  {noreply, append(Events, Ctx)};
+%% Callbacks
+
+init(Config) ->
+  {ok, Ctx} = config(Config),
+  Ctx.
+
+handle_call(Msg, _From, Ctx) ->
+  error_logger:warning_msg("[Channel] not implemented ~p~n", [Msg]),
+  {reply, not_implemented, Ctx}.
+
 handle_cast(pop, Ctx) ->
-  {noreply, transactional_pop(Ctx)};
-handle_cast(Msg, Ctx) -> stepflow_channel:handle_cast(Msg, Ctx).
+  transactional_pop(Ctx);
+
+handle_cast(Msg, Ctx) ->
+  error_logger:warning_msg("[Channel] not implemented ~p~n", [Msg]),
+  {noreply, Ctx}.
 
 handle_info({timeout, _, flush}, Ctx) ->
-  io:format("Flush: ~p~n", [Ctx]),
   {noreply, flush(Ctx)};
-handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
-terminate(_Reason, _Ctx) ->
-  io:format("Terminate!!~n"),
-  ok.
-
-code_change(_OldVsn, Ctx, _Extra) ->
-  io:format("code changed !"),
-  {ok, Ctx}.
+handle_info(Msg, Ctx) ->
+  error_logger:warning_msg("[Channel] not implemented ~p~n", [Msg]),
+  {noreply, Ctx}.
 
 %% Private functions
 
 -spec config(ctx()) -> {ok, ctx()}  | {error, term()}.
 config(#{}=Config) ->
   FlushPeriod = maps:get(flush_period, Config, 3000),
-  Capacity = maps:get(capacity, Config, 5),
+  Capacity = maps:get(capacity, Config, 3),
   Table = maps:get(table, Config, stepflow_channel_mnesia_events),
   {ok, Config#{flush_period => FlushPeriod, capacity => Capacity,
                table => Table}}.
 
 append(Events, #{table := Table}=Ctx) ->
   write(Table, Events),
-  maybe_pop(Ctx).
+  maybe_run(fun() -> stepflow_channel:pop(self()) end, Ctx),
+  Ctx.
 
 create_schema() ->
   mnesia:create_schema([node()]),
@@ -129,10 +115,12 @@ write(Table, Events) ->
         }, write)
     end).
 
-flush(#{chctx := #{skctx := _}, flush_period := FlushPeriod}=Ctx) ->
+flush(#{flush_period := FlushPeriod}=Ctx) ->
   io:format("Flush mnesia memory.. ~n"),
   erlang:start_timer(FlushPeriod, self(), flush),
-  transactional_pop(Ctx).
+  stepflow_channel:pop(self()),
+  Ctx.
+  % transactional_pop(Ctx).
 
 -spec transactional_pop(ctx()) -> ctx().
 transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
@@ -146,13 +134,13 @@ transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
       pop(Events, Ctx#{timestamps => Timestamps})
   end).
 
-pop(Events, #{chctx := ChCtx}=Ctx) ->
-  stepflow_channel:route(?MODULE, Ctx, Events, ChCtx).
+pop(Events, Ctx) ->
+  {route, Events, Ctx}.
 
-maybe_pop(#{capacity := Capacity, table := Table}=Ctx) ->
+maybe_run(Fun, #{capacity := Capacity, table := Table}=Ctx) ->
   case mnesia:table_info(Table, size) >= Capacity of
-    true -> transactional_pop(Ctx);
-    false -> Ctx
+    true -> Fun(); %transactional_pop(Ctx);
+    false -> ok %{noreply, Ctx}
   end.
 
 catch_all(Table) ->
