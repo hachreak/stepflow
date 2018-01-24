@@ -24,8 +24,7 @@
   set_sink/2
 ]).
 
--type ctx()   :: map().
--type event() :: stepflow_event:event().
+-type ctx() :: map().
 
 -record(stepflow_channel_mnesia_events, {timestamp, events}).
 
@@ -51,10 +50,13 @@ connect(Ctx) ->
 
 disconnect(Ctx) -> Ctx.
 
-%% Callbacks
-
 init(Config) ->
   {ok, Ctx} = config(Config),
+  Ctx.
+
+append(Events, #{table := Table}=Ctx) ->
+  write(Table, Events),
+  maybe_run(fun() -> stepflow_channel:pop(self()) end, Ctx),
   Ctx.
 
 handle_call(Msg, _From, Ctx) ->
@@ -84,11 +86,6 @@ config(#{}=Config) ->
   Table = maps:get(table, Config, stepflow_channel_mnesia_events),
   {ok, Config#{flush_period => FlushPeriod, capacity => Capacity,
                table => Table}}.
-
-append(Events, #{table := Table}=Ctx) ->
-  write(Table, Events),
-  maybe_run(fun() -> stepflow_channel:pop(self()) end, Ctx),
-  Ctx.
 
 create_schema() ->
   mnesia:create_schema([node()]),
@@ -137,10 +134,10 @@ transactional_pop(#{capacity := Capacity, table := Table}=Ctx) ->
 pop(Events, Ctx) ->
   {route, Events, Ctx}.
 
-maybe_run(Fun, #{capacity := Capacity, table := Table}=Ctx) ->
+maybe_run(Fun, #{capacity := Capacity, table := Table}) ->
   case mnesia:table_info(Table, size) >= Capacity of
-    true -> Fun(); %transactional_pop(Ctx);
-    false -> ok %{noreply, Ctx}
+    true -> Fun();
+    false -> ok
   end.
 
 catch_all(Table) ->

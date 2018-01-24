@@ -23,7 +23,6 @@
 ]).
 
 -type ctx()   :: map().
--type event() :: stepflow_event:event().
 
 %% Callbacks channel
 
@@ -43,6 +42,17 @@ init(Config) ->
   % erlang:start_timer(3000, self(), flush),
   reset_memory(Config).
 
+connect(Ctx) -> Ctx.
+
+disconnect(Ctx) -> Ctx.
+
+append(Events, #{memory := Memory}=Ctx) ->
+  % save the new value
+  Ctx2 = Ctx#{memory => lists:flatten([Events, Memory])},
+  % trigger pop!
+  stepflow_channel:pop(self()),
+  Ctx2.
+
 handle_call(Msg, _From, Ctx) ->
   error_logger:warning_msg("[Channel] not implemented ~p~n", [Msg]),
   {reply, not_implemented, Ctx}.
@@ -58,18 +68,7 @@ handle_info(_Msg, Ctx) ->
 
 %% Private functions
 
-connect(Ctx) -> Ctx.
-
-disconnect(Ctx) -> Ctx.
-
 reset_memory(Ctx) -> Ctx#{memory => []}.
-
-append(Events, #{memory := Memory}=Ctx) ->
-  % save the new value
-  Ctx2 = Ctx#{memory => lists:flatten([Events, Memory])},
-  % trigger pop!
-  stepflow_channel:pop(self()),
-  Ctx2.
 
 do_pop(#{memory := []}=Ctx) -> {noreply, Ctx};
 do_pop(#{memory := Memory}=Ctx) ->

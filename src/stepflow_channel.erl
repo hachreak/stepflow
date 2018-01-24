@@ -81,8 +81,8 @@ init([{SkConfig, {Module, Config}}]) ->
   {ok, #{ch => {Module, ChCtx2}, sk => SkCtx2}}.
 
 handle_call(Msg, From, #{ch := {Module, ChCtx}}=Ctx) ->
-  {Reply, From2, ChCtx2} = Module:handle_call(Msg, From, ChCtx),
-  {Reply, From2, Ctx#{ch => {Module, ChCtx2}}}.
+  {Reply, Msg2, ChCtx2} = Module:handle_call(Msg, From, ChCtx),
+  {Reply, Msg2, Ctx#{ch => {Module, ChCtx2}}}.
 
 handle_cast({route, Events}, Ctx) -> do_route(Events, Ctx);
 

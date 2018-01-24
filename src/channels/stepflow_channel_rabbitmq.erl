@@ -8,7 +8,6 @@
 -author('Leonardo Rossi <leonardo.rossi@studenti.unipr.it>').
 
 -behaviour(stepflow_channel).
-% -behaviour(gen_server).
 
 -include_lib("amqp_client/include/amqp_client.hrl").
 
@@ -25,8 +24,7 @@
   set_sink/2
 ]).
 
--type ctx()   :: map().
--type event() :: stepflow_event:event().
+-type ctx() :: map().
 
 %% Callbacks
 
@@ -52,8 +50,6 @@ handle_info({#'basic.deliver'{}, _}=Msg, Ctx) ->
 
 handle_info(Msg, Ctx) -> stepflow_channel:handle_info(Msg, Ctx).
 
-%% Callbacks channel
-
 -spec ack(ctx()) -> ctx().
 ack(#{channel := Channel, tag := Tag}=Ctx) ->
   ok = amqp_channel:cast(Channel, #'basic.ack'{delivery_tag = Tag}),
@@ -65,9 +61,6 @@ nack(Ctx)->
   disconnect(Ctx),
   Ctx.
 
-%% Private functions
-
-% TODO check when no sink is set
 set_sink(none, Ctx) -> Ctx;
 set_sink(_SkCtx, Ctx) ->
   % Ctx2 = connect(Ctx),
@@ -97,10 +90,6 @@ append(Events, #{exchange:=Exchange, routing_key:=RoutingKey,
     }, #amqp_msg{payload=Encoder:encode(Events)}),
   Ctx.
 
-pop({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
-    #{encoder := Encoder}=Ctx) ->
-  {route, Encoder:decode(Binary), Ctx#{tag => Tag}}.
-
 % -spec connect(ctx()) -> ctx().
 connect(#{status := online}=Ctx) -> Ctx;
 connect(#{host := Host, exchange := Exchange, durable := Durable,
@@ -119,6 +108,18 @@ connect(#{host := Host, exchange := Exchange, durable := Durable,
   Config#{channel => Channel, connection => Connection, queue => Queue,
           status => online}.
 
+-spec disconnect(ctx()) -> ctx().
+disconnect(
+    #{status := online, connection := Connection, channel := Channel}=Ctx) ->
+  %% Close the channel
+  amqp_channel:disconnect(Channel),
+  %% Close the connection
+  amqp_connection:disconnect(Connection),
+  Ctx#{status => offline};
+disconnect(Ctx) -> Ctx#{status => offline}.
+
+%% Private functions
+
 -spec queue_binding(ctx()) -> {ok, ctx()} | {error, disconnected}.
 queue_binding(#{exchange := Exchange, channel := Channel, queue := Queue,
                routing_key := RoutingKey}=Ctx) ->
@@ -131,14 +132,6 @@ queue_binding(#{exchange := Exchange, channel := Channel, queue := Queue,
   {ok, Ctx};
 queue_binding(_) -> {error, disconnected}.
 
-% Private functions
-
--spec disconnect(ctx()) -> ctx().
-disconnect(
-    #{status := online, connection := Connection, channel := Channel}=Ctx) ->
-  %% Close the channel
-  amqp_channel:disconnect(Channel),
-  %% Close the connection
-  amqp_connection:disconnect(Connection),
-  Ctx#{status => offline};
-disconnect(Ctx) -> Ctx#{status => offline}.
+pop({#'basic.deliver'{delivery_tag = Tag}, #amqp_msg{payload=Binary}},
+    #{encoder := Encoder}=Ctx) ->
+  {route, Encoder:decode(Binary), Ctx#{tag => Tag}}.

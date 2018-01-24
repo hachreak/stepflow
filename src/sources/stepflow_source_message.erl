@@ -46,7 +46,6 @@ setup_channels(PidS, PidCs) ->
 start_link(Config) ->
   gen_server:start_link(?MODULE, [Config], []).
 
--spec init(list(ctx())) -> {ok, ctx()}.
 init([{ItCtxs, Config}]) ->
   {ok, SrcCtx} = stepflow_source:init(ItCtxs),
   {ok, Config#{source => SrcCtx}}.
